@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Production RAG — Document workspace</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/"
+        ><span class="brand-mark">R</span
+        ><span>Production<span class="brand-sub">RAG WORKSPACE</span></span></a
+      >
+      <div class="nav-label">WORKSPACE</div>
+      <a class="nav-item active" href="#workspace"
+        ><span aria-hidden="true">◈</span> Ask your documents</a
+      >
+      <a class="nav-item" href="#library"
+        ><span aria-hidden="true">▤</span> Document library</a
+      >
+      <a class="nav-item" href="/docs" target="_blank" rel="noopener"
+        ><span aria-hidden="true">↗</span> API reference</a
+      >
+      <div class="sidebar-note">
+        <span class="small-dot"></span> Evidence comes first
+        <p>Answers grounded in your documents, with sources you can inspect.</p>
+      </div>
+      <div class="sidebar-footer">HYBRID SEARCH · TRACEABLE SOURCES</div>
+    </aside>
+    <main id="workspace">
+      <header class="topbar">
+        <span class="breadcrumb"
+          >Workspace <span>/</span> Document intelligence</span
+        ><span id="service-status" class="badge neutral"
+          >Checking service…</span
+        >
+      </header>
+      <div class="page">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">YOUR KNOWLEDGE, CONNECTED</p>
+            <h1>Ask. Find. Understand.</h1>
+            <p class="subtitle">
+              Turn your documents into answers you can trace back to the source.
+            </p>
+          </div>
+          <span class="heading-art" aria-hidden="true">✳</span>
+        </div>
+        <section class="connection card" aria-labelledby="connection-title">
+          <div>
+            <h2 id="connection-title">Connect your workspace</h2>
+            <p>Your API key determines which documents you can access.</p>
+          </div>
+          <form id="connect-form" class="connection-form">
+            <label class="sr-only" for="key">Application API key</label
+            ><input
+              id="key"
+              type="password"
+              autocomplete="off"
+              placeholder="Application API key"
+              required
+            /><button class="button secondary" id="connect" type="submit">
+              Connect <span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p id="connection-status" class="inline-status" role="status">
+            The key stays in this tab and is never saved in browser storage.
+          </p>
+        </section>
+        <div class="workspace-grid">
+          <section class="card upload-card" aria-labelledby="upload-title">
+            <div class="card-heading">
+              <span class="step">01</span>
+              <div>
+                <h2 id="upload-title">Add your knowledge</h2>
+                <p>Upload a policy, report, or manual.</p>
+              </div>
+            </div>
+            <form id="upload-form">
+              <label id="dropzone" class="dropzone" for="file"
+                ><span class="upload-icon" aria-hidden="true">↑</span
+                ><strong id="file-label">Choose a document</strong
+                ><span id="file-description">or drop a file here</span
+                ><small>PDF, TXT, Markdown · up to 10 MiB</small
+                ><input
+                  id="file"
+                  type="file"
+                  accept=".pdf,.txt,.md"
+                  aria-label="Choose document"
+              /></label>
+              <div class="form-row">
+                <label
+                  >Version<input
+                    id="version"
+                    value="1"
+                    maxlength="100"
+                    required /></label
+                ><label
+                  >Category<input
+                    id="category"
+                    value="general"
+                    maxlength="100"
+                    required
+                /></label>
+              </div>
+              <button class="button primary full" id="upload" type="submit">
+                Upload document <span aria-hidden="true">↑</span>
+              </button>
+            </form>
+            <p id="upload-status" class="inline-status" role="status">
+              Choosing a file does not upload it. Wait for confirmation after
+              uploading.
+            </p>
+            <div class="tip">
+              <span aria-hidden="true">◎</span>
+              <p>
+                Use a new version when content changes. Questions use the latest
+                uploaded version by default.
+              </p>
+            </div>
+          </section>
+          <section class="card ask-card" aria-labelledby="ask-title">
+            <div class="card-heading">
+              <span class="step">02</span>
+              <div>
+                <h2 id="ask-title">Ask a better question</h2>
+                <p>Be specific, or request a document overview.</p>
+              </div>
+            </div>
+            <form id="query-form">
+              <label class="sr-only" for="question">Your question</label
+              ><textarea
+                id="question"
+                rows="5"
+                maxlength="2000"
+                minlength="3"
+                required
+                placeholder="What does this document say about…?"
+              ></textarea>
+              <div class="question-footer">
+                <span>Answers include supporting passages</span
+                ><span id="character-count">0 / 2000</span>
+              </div>
+              <div class="suggestions">
+                <button
+                  type="button"
+                  data-question="Summarize the main points of this document."
+                >
+                  Summarize main points</button
+                ><button
+                  type="button"
+                  data-question="What are the key requirements and limitations?"
+                >
+                  Requirements & limitations
+                </button>
+              </div>
+              <details class="filters" open>
+                <summary>Focus your search <span>optional</span></summary>
+                <div class="form-row">
+                  <label
+                    >Category<input
+                      id="filter"
+                      placeholder="All categories"
+                      maxlength="100" /></label
+                  ><label
+                    >Filename<input
+                      id="filename-filter"
+                      placeholder="All documents"
+                      maxlength="255"
+                  /></label>
+                </div>
+                <p>Use a filename to ask about one specific document.</p>
+              </details>
+              <button class="button primary" id="ask" type="submit">
+                Find an answer <span aria-hidden="true">↗</span>
+              </button>
+            </form>
+          </section>
+        </div>
+        <section class="card answer-card" aria-labelledby="answer-title">
+          <div class="answer-heading">
+            <div>
+              <p class="eyebrow">GROUNDED RESPONSE</p>
+              <h2 id="answer-title">Your answer</h2>
+            </div>
+            <div class="answer-tools">
+              <span id="answer-meta" class="badge neutral" hidden></span
+              ><button id="copy" class="button quiet" disabled>
+                Copy answer
+              </button>
+            </div>
+          </div>
+          <p
+            id="status"
+            role="status"
+            aria-live="polite"
+            class="inline-status"
+          ></p>
+          <div id="answer-empty" class="empty-state">
+            <span aria-hidden="true">◈</span>
+            <h3>A question is the starting point.</h3>
+            <p>
+              Upload a document, then ask a question. Your answer and its
+              supporting sources will appear here.
+            </p>
+          </div>
+          <div id="answer" class="answer-text" hidden></div>
+          <div id="sources" class="sources"></div>
+        </section>
+        <section
+          class="card library-card"
+          id="library"
+          aria-labelledby="library-title"
+        >
+          <div class="answer-heading">
+            <div>
+              <p class="eyebrow">DOCUMENT LIBRARY</p>
+              <h2 id="library-title">
+                Your source material
+                <span id="document-count" class="count">0</span>
+              </h2>
+            </div>
+            <button class="button secondary" id="list">Refresh library</button>
+          </div>
+          <p id="library-status" class="inline-status" role="status">
+            Connect to see your documents.
+          </p>
+          <div id="documents" class="document-list"></div>
+        </section>
+        <footer class="page-footer">
+          Check important claims against their cited passages.<span
+            >Production RAG · Document workspace</span
+          >
+        </footer>
+      </div>
+    </main>
+  </body>
+</html>

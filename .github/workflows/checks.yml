@@ -1,0 +1,27 @@
+name: checks
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: rag
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: test-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rag -d rag"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.23"
+      - run: uv sync --frozen
+      - run: uv run ruff check app tests scripts
+      - run: uv run ruff format --check app tests scripts
+      - run: uv run pytest -q
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://rag:test-only-password@localhost:5432/rag

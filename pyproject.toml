@@ -1,0 +1,33 @@
+[project]
+name = "production-rag"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+ "fastapi>=0.115,<1",
+ "uvicorn[standard]>=0.34,<1",
+ "python-multipart>=0.0.20,<1",
+ "pydantic-settings>=2.8,<3",
+ "langchain-openai>=1,<2",
+ "langchain-text-splitters>=1,<2",
+ "langgraph>=1,<2",
+ "langsmith>=0.3,<1",
+ "chromadb>=1,<2",
+ "pypdf>=5,<7",
+ "sqlalchemy>=2,<3",
+ "psycopg[binary]>=3.2,<4",
+ "pgvector>=0.3,<1",
+ "rank-bm25>=0.2.2,<1",
+ "sentence-transformers>=3,<6",
+ "tenacity>=9,<10",
+ "prometheus-client>=0.21,<1",
+ "httpx>=0.28,<1",
+ "langchain-ollama>=1,<2",
+]
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+[tool.pytest.ini_options]
+pythonpath = ["."]
+[tool.ruff]
+line-length = 110
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

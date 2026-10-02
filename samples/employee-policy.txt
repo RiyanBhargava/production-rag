@@ -1,0 +1,10 @@
+# Employee policy
+
+## Annual leave
+Employees receive 24 days of paid annual leave each year. Leave requests must be submitted 10 business days before the start date.
+
+## Device security
+Report lost company laptops to the security team within 2 hours. Error code SEC-401 means the device certificate has expired.
+
+## Expenses
+Expense reports must be submitted within 30 days. Claims above 500 AED need manager approval.
