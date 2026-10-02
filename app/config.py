@@ -9,10 +9,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     app_env: Literal["development", "production"] = "development"
     storage_backend: Literal["chroma", "postgres"] = "chroma"
-    model_mode: Literal["demo", "openai", "ollama"] = "demo"
+    model_mode: Literal["demo", "openai", "ollama", "gemini"] = "demo"
     data_dir: Path = Path("data")
     api_keys: dict[str, str] = {"local-change-me": "demo"}
     openai_api_key: str = ""
+    gemini_api_key: str = ""
+    gemini_chat_model: str = "gemini-2.5-flash"
+    gemini_timeout_seconds: float = Field(default=60, gt=0, le=600)
     chat_model: str = "gpt-4.1-mini"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
@@ -30,6 +33,8 @@ class Settings(BaseSettings):
     langsmith_tracing: bool = False
     langsmith_api_key: str = ""
     langsmith_project: str = "production-rag"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_workspace_id: str = ""
     max_upload_bytes: int = 10 * 1024 * 1024
     max_document_chars: int = 2_000_000
     max_chunks: int = 5000
@@ -42,6 +47,11 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 300
     rate_limit_per_minute: int = 60
 
+    @property
+    def embedding_mode(self):
+        """Gemini changes generation only; retain the existing local embedding space."""
+        return "ollama" if self.model_mode == "gemini" else self.model_mode
+
     @model_validator(mode="after")
     def validate_setup(self):
         if self.chunk_overlap >= self.chunk_size or self.max_attempts not in range(1, 4):
@@ -50,15 +60,20 @@ class Settings(BaseSettings):
             raise ValueError("Configure at least one API key")
         if self.model_mode == "openai" and not self.openai_api_key:
             raise ValueError("OPENAI_API_KEY is required")
-        if self.model_mode == "ollama":
+        if self.model_mode == "gemini" and not self.gemini_api_key:
+            raise ValueError("GEMINI_API_KEY is required")
+        if self.langsmith_tracing and not self.langsmith_api_key:
+            raise ValueError("LANGSMITH_API_KEY is required when tracing is enabled")
+        if self.embedding_mode == "ollama":
             from urllib.parse import urlparse
 
             url = urlparse(self.ollama_base_url)
             if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password:
                 raise ValueError("OLLAMA_BASE_URL must be an HTTP(S) URL without credentials")
-            if any(
-                "cloud" in model.lower() for model in (self.ollama_chat_model, self.ollama_embedding_model)
-            ):
+            local_models = [self.ollama_embedding_model]
+            if self.model_mode == "ollama":
+                local_models.append(self.ollama_chat_model)
+            if any("cloud" in model.lower() for model in local_models):
                 raise ValueError("Ollama mode requires local model tags, not cloud models")
         if self.storage_backend == "postgres" and not self.database_url:
             raise ValueError("DATABASE_URL is required")

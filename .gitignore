@@ -1,6 +1,7 @@
 .env*
 !.env.example
 !.env.ollama.example
+!.env.gemini.example
 .venv/
 data/
 data-*/

@@ -58,7 +58,7 @@ class Store:
             import chromadb
 
             client = chromadb.PersistentClient(path=str(settings.data_dir / "chroma"))
-            namespace = f"chunks-{settings.model_mode}-{settings.embedding_dimensions}"
+            namespace = f"chunks-{settings.embedding_mode}-{settings.embedding_dimensions}"
             self.chroma = client.get_or_create_collection(namespace, metadata={"hnsw:space": "cosine"})
             self.rebuild_index()
 
@@ -66,15 +66,15 @@ class Store:
         fingerprint = json.dumps(
             (
                 [
-                    self.settings.model_mode,
+                    self.settings.embedding_mode,
                     self.settings.ollama_embedding_model,
                     self.settings.embedding_dimensions,
                     self.settings.ollama_document_prefix,
                     self.settings.ollama_query_prefix,
                 ]
-                if self.settings.model_mode == "ollama"
+                if self.settings.embedding_mode == "ollama"
                 else [
-                    self.settings.model_mode,
+                    self.settings.embedding_mode,
                     self.settings.embedding_model,
                     self.settings.embedding_dimensions,
                 ]

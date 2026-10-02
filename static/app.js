@@ -223,7 +223,7 @@ function renderAnswer(data, seconds) {
   el("answer-meta").className =
     `badge ${data.insufficient_evidence ? "neutral" : "success"}`;
   el("answer-meta").textContent =
-    `${data.mode === "demo" ? "Demo excerpts" : data.mode === "ollama" ? "Local model" : "Hosted model"} · ${data.cached ? "cached" : `${seconds.toFixed(1)}s`}`;
+    `${data.mode === "demo" ? "Demo excerpts" : data.mode === "ollama" ? "Local model" : data.mode === "gemini" ? "Gemini" : "Hosted model"} · ${data.cached ? "cached" : `${seconds.toFixed(1)}s`}`;
   el("sources").replaceChildren();
   if (data.citations.length) {
     const title = document.createElement("p");
@@ -300,7 +300,7 @@ el("copy").addEventListener("click", async () => {
     const health = await response.json();
     el("service-status").className = "badge success";
     el("service-status").textContent =
-      `${health.mode === "ollama" ? "Local AI" : health.mode === "demo" ? "Demo" : "Hosted AI"} · ${health.storage === "postgres" ? "PostgreSQL" : "Chroma"} · Ready`;
+      `${health.mode === "ollama" ? "Local AI" : health.mode === "demo" ? "Demo" : health.mode === "gemini" ? "Gemini" : "Hosted AI"} · ${health.storage === "postgres" ? "PostgreSQL" : "Chroma"} · Ready`;
   } catch {
     el("service-status").className = "badge error";
     el("service-status").textContent = "Service unavailable";

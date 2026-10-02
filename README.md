@@ -1,6 +1,6 @@
 # Production RAG
 
-A document question-answering application with hybrid retrieval, cross-encoder reranking, a bounded LangGraph workflow, and answers tied to source passages. Run real models locally with Ollama, or use OpenAI. The backend is FastAPI; the browser interface needs no separate build.
+A document question-answering application with hybrid retrieval, cross-encoder reranking, a bounded LangGraph workflow, and answers tied to source passages. Run real models locally with Ollama, or use Gemini/OpenAI. The backend is FastAPI; the browser interface needs no separate build.
 
 > Production-style, with explicit limits: use one API worker. Uploads are synchronous, and answers are serialized with document mutations. Evaluate on your own documents before deploying to users.
 
@@ -127,7 +127,8 @@ The database uses the `postgres-data` named volume. Do not add `-v` to `down` un
 | Ollama | Real chat + local embeddings | No LLM provider key |
 | OpenAI | Chat + embeddings | `OPENAI_API_KEY` |
 | Demo | Deterministic embeddings and retrieved excerpts; no LLM | None |
-| Gemini / Grok | Not implemented | A key alone will not enable these |
+| Gemini | Hosted generation + existing local Ollama embeddings | `GEMINI_API_KEY` |
+| Grok | Not implemented | Adapter needed |
 
 For OpenAI, set `MODEL_MODE=openai`, `OPENAI_API_KEY`, `CHAT_MODEL`, `EMBEDDING_MODEL`, and matching `EMBEDDING_DIMENSIONS`. Use a new store when changing embedding configuration. Model names and quotas should be checked in your provider account.
 
@@ -137,12 +138,50 @@ For OpenAI, set `MODEL_MODE=openai`, `OPENAI_API_KEY`, `CHAT_MODEL`, `EMBEDDING_
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=<your-langsmith-key>
 LANGSMITH_PROJECT=production-rag
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_WORKSPACE_ID=
 TRACE_CONTENT=false
 ```
 
 Graph and LangChain model runs appear in the project. Inputs/outputs are hidden by default. Enable `TRACE_CONTENT=true` only when you intend to send questions and document passages to LangSmith. Parsing and SQL operations are not independently instrumented spans. Token usage depends on model reporting; local inference is not a hosted provider bill.
 
-Gemini and Grok can also be traced through their [Google](https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai) and [xAI](https://docs.langchain.com/oss/python/integrations/chat/xai) LangChain integrations after adding and testing provider adapters. See [LangSmith tracing](https://docs.langchain.com/langsmith/trace-with-langchain).
+Gemini uses the native [Google LangChain integration](https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai) and participates in the same traces. Grok would still require an adapter. See [LangSmith tracing](https://docs.langchain.com/langsmith/trace-with-langchain).
+
+## Switch to Gemini without re-uploading
+
+Get a key from [Google AI Studio](https://aistudio.google.com/apikey). In your existing private `.env`, change/add:
+
+```dotenv
+MODEL_MODE=gemini
+GEMINI_API_KEY=<your-real-google-key>
+GEMINI_CHAT_MODEL=gemini-2.5-flash
+GEMINI_TIMEOUT_SECONDS=60
+```
+
+Keep your database, tenant keys, Nomic model, dimensions (768), and prefixes unchanged. Gemini generates answers and query rewrites; Ollama still embeds queries/documents. The embedding fingerprint and Chroma collection are unchanged when switching between Ollama and Gemini with the same embedding settings, so existing documents remain searchable. Keep Ollama running. `.env.gemini.example` is a fresh-development template; do not overwrite your existing private configuration with it.
+
+Restart the API after `uv sync --frozen`. Run `uv run python -m scripts.verify_local` for an isolated real Gemini smoke check after configuring the key; it calls the hosted API and may use quota/credits. No live Gemini call is part of ordinary tests. Select another supported Gemini model through `GEMINI_CHAT_MODEL` if your account does not offer the default. Google receives the question and selected evidence (and the original question when rewriting), not your stored vectors.
+
+For LangSmith, open [the dashboard](https://smith.langchain.com), obtain its own API key from account/workspace settings, configure the tracing values above and restart. Ask a new uncached question, open the `production-rag` project under tracing, then the `rag-question` run. Expand retrieve/select/rewrite/answer and model calls. `TRACE_CONTENT=false` hides inputs/outputs; use true only if you intend to send document evidence to LangSmith. EU accounts need `LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com`; use your account's documented region endpoint and workspace ID if required.
+
+## Browse PostgreSQL visually
+
+```powershell
+docker compose --profile tools up -d adminer
+```
+
+Open **http://127.0.0.1:8080**. Login with System **PostgreSQL**, Server **postgres**, Username **rag**, Database **rag**, and the private `POSTGRES_PASSWORD` from `.env`. This is the database password, not your website app key. Click a table and **Select data** to browse rows; `documents` stores versions and `chunks` stores extracted text, metadata and vectors. Adminer can also modify data, so browse carefully.
+
+The optional Adminer service is bound to localhost and needs no database password in its compose definition. Stop it with `docker compose --profile tools stop adminer`. PostgreSQL is local in the persistent Docker volume, not in Supabase unless you explicitly configure a Supabase SQL connection. Original uploaded file bytes are not archived.
+
+To inspect size from PowerShell without an interactive paste:
+
+```powershell
+docker compose exec -T postgres psql -U rag -d rag -c "SELECT pg_size_pretty(pg_database_size('rag')) AS database_size;"
+docker system df
+```
+
+Database size differs from the complete volume: PostgreSQL also needs system databases, WAL and overhead. Docker images, Python dependencies and downloaded models consume additional space. Local demo/evaluation stores under `data` are independent of the active PostgreSQL store.
 
 ## API
 
@@ -183,11 +222,11 @@ Supported filters also include `version` and `document_ids`. Queries use active 
 | `scripts/evaluate.py` | Semantic/keyword/fused/reranked Recall@K and MRR; optional generation |
 | `scripts/demo_evaluation.py` | Isolated sample evaluation |
 | `scripts/verify_local.py` | Actual Ollama/reranker smoke checks in a temporary local store |
-| `tests/` | API, tenant isolation, provider validation, citations, parsing, retrieval regressions |
+| `tests/` | API, tenant isolation, Gemini/Ollama provider validation, citations, parsing, retrieval regressions |
 | `.github/workflows/checks.yml` | CI with a real pgvector database |
 | `Dockerfile`, `compose*.yaml` | Container image and deployment definitions |
 | `pyproject.toml`, `uv.lock` | Dependencies and reproducible versions |
-| `.env*.example` | Public configuration templates; not real credentials |
+| `.env*.example` | Public demo, Ollama and Gemini templates; not real credentials |
 
 ## Test and evaluate
 
@@ -199,7 +238,7 @@ uv run python -m scripts.demo_evaluation
 uv run python -m scripts.verify_local
 ```
 
-Ordinary tests use fake/demo models and do not spend API credits. The local verification requires running Ollama and checks supported and unsupported sample questions. The PostgreSQL test runs only when `TEST_DATABASE_URL` is set; CI supplies it. Use a dedicated test database.
+Ordinary tests use fake/demo models and do not spend API credits. The verification requires running Ollama and checks supported and unsupported sample questions with the configured Ollama or Gemini generator. The PostgreSQL test runs only when `TEST_DATABASE_URL` is set; CI supplies it. Use a dedicated test database.
 
 For your own documents, export chunks, label relevant IDs by reading the passages, then evaluate:
 

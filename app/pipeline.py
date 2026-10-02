@@ -6,6 +6,7 @@ from typing import Literal, TypedDict
 import httpx
 from langchain_core.exceptions import OutputParserException
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langgraph.graph import END, START, StateGraph
@@ -65,22 +66,33 @@ class Models:
                 max_retries=2,
                 max_tokens=1600,
             )
-        elif settings.model_mode == "ollama":
+        elif settings.embedding_mode == "ollama":
             client_kwargs = {"timeout": settings.ollama_timeout_seconds}
             self.embedder = OllamaEmbeddings(
                 model=settings.ollama_embedding_model,
                 base_url=settings.ollama_base_url,
                 client_kwargs=client_kwargs,
             )
-            self.llm = ChatOllama(
-                model=settings.ollama_chat_model,
-                base_url=settings.ollama_base_url,
-                temperature=0,
-                num_ctx=settings.ollama_context_tokens,
-                num_predict=1600,
-                client_kwargs=client_kwargs,
-                keep_alive="5m",
-            )
+            if settings.model_mode == "gemini":
+                self.llm = ChatGoogleGenerativeAI(
+                    model=settings.gemini_chat_model,
+                    api_key=settings.gemini_api_key,
+                    vertexai=False,
+                    temperature=1,
+                    timeout=settings.gemini_timeout_seconds,
+                    max_retries=2,
+                    max_output_tokens=4096,
+                )
+            else:
+                self.llm = ChatOllama(
+                    model=settings.ollama_chat_model,
+                    base_url=settings.ollama_base_url,
+                    temperature=0,
+                    num_ctx=settings.ollama_context_tokens,
+                    num_predict=1600,
+                    client_kwargs=client_kwargs,
+                    keep_alive="5m",
+                )
             self.check_available()
             self.validate_vectors(
                 self.embedder.embed_documents([settings.ollama_document_prefix + "startup check"]), 1
@@ -93,7 +105,7 @@ class Models:
     def embed(self, texts):
         if self.embedder:
             inputs = texts
-            if self.settings.model_mode == "ollama":
+            if self.settings.embedding_mode == "ollama":
                 inputs = [self.settings.ollama_document_prefix + text for text in texts]
             vectors = []
             for start in range(0, len(inputs), 64):
@@ -112,7 +124,7 @@ class Models:
 
     def embed_query(self, question):
         if self.embedder:
-            prefix = self.settings.ollama_query_prefix if self.settings.model_mode == "ollama" else ""
+            prefix = self.settings.ollama_query_prefix if self.settings.embedding_mode == "ollama" else ""
             return self.validate_vectors([self.embedder.embed_query(prefix + question)], 1)[0]
         return self.embed([question])[0]
 
@@ -127,13 +139,15 @@ class Models:
         return vectors
 
     def check_available(self):
-        if self.settings.model_mode != "ollama":
+        if self.settings.embedding_mode != "ollama":
             return
         try:
             response = httpx.get(self.settings.ollama_base_url.rstrip("/") + "/api/tags", timeout=5)
             response.raise_for_status()
             available = {m["name"] for m in response.json()["models"]}
-            required = [self.settings.ollama_chat_model, self.settings.ollama_embedding_model]
+            required = [self.settings.ollama_embedding_model]
+            if self.settings.model_mode == "ollama":
+                required.append(self.settings.ollama_chat_model)
             missing = [tag for tag in required if (tag if ":" in tag else tag + ":latest") not in available]
             if missing:
                 raise ValueError(
@@ -244,8 +258,8 @@ class Pipeline:
                     ("human", "{question}"),
                 ]
             )
-            query = (prompt | self.models.llm).invoke({"question": state["question"]}).content
-            return {"query": str(query)[:1000]}
+            message = (prompt | self.models.llm).invoke({"question": state["question"]})
+            return {"query": message.text[:1000] or state["question"]}
         stop = {"what", "is", "the", "a", "an", "does", "how", "can", "i", "and", "please"}
         return {
             "query": " ".join(t for t in tokenize(state["question"]) if t not in stop) or state["question"]
@@ -288,13 +302,20 @@ class Pipeline:
                 f"[{sid}] Document: {c['filename']}\nSection: {c['section']}\n{c['text']}"
                 for sid, c in sources.items()
             )
-            options = {"method": "json_schema"} if self.settings.model_mode == "ollama" else {}
+            options = {"method": "json_schema"} if self.settings.model_mode in {"ollama", "gemini"} else {}
             # Constrain generation to the actual source IDs, not arbitrary strings.
             source_type = Literal[tuple(sources)]
             evidence_claim = create_model(
                 "EvidenceClaim",
                 __base__=Claim,
-                source_ids=(list[source_type], Field(min_length=1)),
+                source_ids=(
+                    list[source_type],
+                    Field(
+                        min_length=1,
+                        # Use an enum even for one source; Gemini supports enum in its schema subset.
+                        json_schema_extra={"items": {"type": "string", "enum": list(sources)}},
+                    ),
+                ),
             )
             evidence_answer = create_model(
                 "EvidenceAnswer",
@@ -353,5 +374,12 @@ class Pipeline:
                 "attempts": 0,
                 "candidates": [],
             },
-            config={"recursion_limit": 16, "metadata": {"mode": self.settings.model_mode}},
+            config={
+                "recursion_limit": 16,
+                "run_name": "rag-question",
+                "metadata": {
+                    "mode": self.settings.model_mode,
+                    "embedding_mode": self.settings.embedding_mode,
+                },
+            },
         )["result"]

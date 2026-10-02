@@ -65,6 +65,8 @@ def create_app(settings=None):
     settings = settings or Settings()
     os.environ["LANGSMITH_TRACING"] = str(settings.langsmith_tracing).lower()
     os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
+    os.environ["LANGSMITH_ENDPOINT"] = settings.langsmith_endpoint.rstrip("/")
+    os.environ["LANGSMITH_WORKSPACE_ID"] = settings.langsmith_workspace_id
     if settings.langsmith_api_key:
         os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
     # Tracing can expose document content. Default to redacted traces even if tracing is enabled.

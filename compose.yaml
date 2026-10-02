@@ -1,4 +1,14 @@
 services:
+  adminer:
+    image: adminer:5
+    profiles: [tools]
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
   postgres:
     image: pgvector/pgvector:pg16
     environment:

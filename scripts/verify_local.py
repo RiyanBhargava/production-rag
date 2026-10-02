@@ -1,4 +1,4 @@
-"""Verify actual local embeddings, retrieval, reranking, structured answers, and citations."""
+"""Verify local embeddings and either Ollama or Gemini answers in an isolated store."""
 
 import json
 import subprocess
@@ -15,8 +15,8 @@ from app.main import create_app
 
 def main():
     config = Settings()
-    if config.model_mode != "ollama":
-        raise ValueError("Configure MODEL_MODE=ollama before running this check")
+    if config.model_mode not in {"ollama", "gemini"}:
+        raise ValueError("Configure MODEL_MODE=ollama or gemini before running this check")
     root = Path(__file__).resolve().parents[1]
     records = []
     if len(sys.argv) == 1:
@@ -54,7 +54,7 @@ def main():
             response = client.post("/query", headers=headers, json={"question": question})
             assert response.status_code == 200, response.text
             answer = response.json()
-            assert answer["mode"] == "ollama"
+            assert answer["mode"] == config.model_mode
             if expected:
                 assert not answer["insufficient_evidence"], answer
                 assert expected in answer["answer"].lower(), answer
@@ -66,7 +66,15 @@ def main():
             records.append({"question": question, "seconds": round(time.monotonic() - started, 2), **answer})
             print(json.dumps(records[-1], ensure_ascii=False), flush=True)
         assert client.get("/health/ready").status_code == 200
-    output = root / "data" / "local-model-verification.json"
+    output = (
+        root
+        / "data"
+        / (
+            "gemini-model-verification.json"
+            if config.model_mode == "gemini"
+            else "local-model-verification.json"
+        )
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(records, indent=2), encoding="utf-8")
     print(f"Passed. Report: {output}")
