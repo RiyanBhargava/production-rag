@@ -6,14 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
     app_env: Literal["development", "production"] = "development"
     storage_backend: Literal["chroma", "postgres"] = "chroma"
     model_mode: Literal["demo", "openai", "ollama", "gemini"] = "demo"
     data_dir: Path = Path("data")
-    api_keys: dict[str, str] = {"local-change-me": "demo"}
-    openai_api_key: str = ""
-    gemini_api_key: str = ""
+    api_keys: dict[str, str] = Field(default={"local-change-me": "demo"}, repr=False)
+    openai_api_key: str = Field(default="", repr=False)
+    gemini_api_key: str = Field(default="", repr=False)
     gemini_chat_model: str = "gemini-2.5-flash"
     gemini_timeout_seconds: float = Field(default=60, gt=0, le=600)
     chat_model: str = "gpt-4.1-mini"
@@ -26,26 +26,26 @@ class Settings(BaseSettings):
     ollama_context_tokens: int = Field(default=8192, ge=4096)
     ollama_document_prefix: str = "search_document: "
     ollama_query_prefix: str = "search_query: "
-    database_url: str = ""
+    database_url: str = Field(default="", repr=False)
     reranker_mode: Literal["lexical", "cross_encoder"] = "lexical"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     trace_content: bool = False
     langsmith_tracing: bool = False
-    langsmith_api_key: str = ""
+    langsmith_api_key: str = Field(default="", repr=False)
     langsmith_project: str = "production-rag"
     langsmith_endpoint: str = "https://api.smith.langchain.com"
     langsmith_workspace_id: str = ""
-    max_upload_bytes: int = 10 * 1024 * 1024
-    max_document_chars: int = 2_000_000
-    max_chunks: int = 5000
-    chunk_size: int = 1000
-    chunk_overlap: int = 150
-    candidate_k: int = 20
-    context_k: int = 5
-    context_chars: int = 12000
+    max_upload_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
+    max_document_chars: int = Field(default=2_000_000, gt=0)
+    max_chunks: int = Field(default=5000, gt=0)
+    chunk_size: int = Field(default=1000, gt=0)
+    chunk_overlap: int = Field(default=150, ge=0)
+    candidate_k: int = Field(default=20, gt=0)
+    context_k: int = Field(default=5, gt=0)
+    context_chars: int = Field(default=12000, gt=0)
     max_attempts: int = 2
-    cache_ttl_seconds: int = 300
-    rate_limit_per_minute: int = 60
+    cache_ttl_seconds: int = Field(default=300, ge=0)
+    rate_limit_per_minute: int = Field(default=60, gt=0)
 
     @property
     def embedding_mode(self):
@@ -58,6 +58,8 @@ class Settings(BaseSettings):
             raise ValueError("Invalid chunk overlap or retrieval attempt limit")
         if not self.api_keys:
             raise ValueError("Configure at least one API key")
+        if any(not key.strip() or not tenant.strip() for key, tenant in self.api_keys.items()):
+            raise ValueError("Application keys and tenant IDs must not be blank")
         if self.model_mode == "openai" and not self.openai_api_key:
             raise ValueError("OPENAI_API_KEY is required")
         if self.model_mode == "gemini" and not self.gemini_api_key:

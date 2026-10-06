@@ -1,40 +1,12 @@
 # Production RAG
 
-A document question-answering application with hybrid retrieval, cross-encoder reranking, a bounded LangGraph workflow, and answers tied to source passages. Run real models locally with Ollama, or use Gemini/OpenAI. The backend is FastAPI; the browser interface needs no separate build.
+Upload documents and ask questions with hybrid retrieval, reranking and citations. FastAPI serves the browser interface/API. Choose Ollama locally, Gemini with local embeddings, or OpenAI.
 
-> Production-style, with explicit limits: use one API worker. Uploads are synchronous, and answers are serialized with document mutations. Evaluate on your own documents before deploying to users.
+This README covers setup. `PROJECT_GUIDE.md` is the concise local project explanation; it stays off GitHub because only README is published as Markdown.
 
-## How it works
+## 1. Install
 
-```mermaid
-flowchart LR
-    U[PDF / TXT / Markdown] --> P[Parse, chunk, add metadata]
-    P --> E[Embeddings]
-    E --> DB[Chroma + SQLite or PostgreSQL + pgvector]
-    Q[Question + authenticated tenant + filters] --> H[Semantic + keyword retrieval]
-    DB --> H
-    H --> F[Reciprocal rank fusion]
-    F --> R[Cross-encoder reranking]
-    R --> C[Bounded context selection]
-    C --> W{Retry needed?}
-    W -->|Within attempt limit| X[Rewrite query]
-    X --> H
-    W -->|Answer| L[Grounded structured generation]
-    L --> V[Validate source IDs]
-    V --> A[Answer + citations or abstention]
-```
-
-Features include page/section metadata, exact duplicate detection, document versions, tenant-scoped filters, revision-aware response caching, rate and upload limits, request IDs, health checks, Prometheus metrics, optional LangSmith traces, and retrieval evaluation with Recall@K and MRR.
-
-## Requirements
-
-- Python 3.12 or 3.13 and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-- [Ollama](https://ollama.com/download) for local inference. Model downloads and the Python dependencies require disk space; a GPU helps.
-- [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) for the PostgreSQL or full container setup. On Windows, use Linux containers.
-
-Commands below use PowerShell. Run them from the repository folder.
-
-## 1. Install and configure local models
+Use Python 3.12/3.13, [uv](https://docs.astral.sh/uv/getting-started/installation/), [Ollama](https://ollama.com/download) and Docker Desktop with Linux containers. Commands use PowerShell from the project folder.
 
 ```powershell
 git clone https://github.com/RiyanBhargava/production-rag.git
@@ -43,30 +15,21 @@ uv sync --frozen
 if (-not (Test-Path .env)) { Copy-Item .env.ollama.example .env }
 ollama pull llama3:latest
 ollama pull nomic-embed-text:latest
-ollama list
 ```
 
-Keep the Ollama desktop application running. If it is not already serving, start `ollama serve` in a separate terminal. Do not start a second server on the same port.
+Keep Ollama running. If it is not already serving, start `ollama serve` in another terminal. Preserve an existing `.env`. First startup downloads the reranker.
 
-The example selects real local inference, 768-dimensional embeddings, Chroma, and a cross-encoder. Its `local-change-me` application key is for local development only. The first start also downloads the reranker. Ollama requires no paid LLM API key; hardware and hosting still have costs.
-
-## 2. Start the API and use the interface
+## 2. Start and try it
 
 ```powershell
 uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-Open **http://127.0.0.1:8000**. Enter the application key from `API_KEYS` in your private `.env`, then connect. This is the key for this application, not an OpenAI or LangSmith key.
+Open **http://127.0.0.1:8000** and connect with an app key from private `.env` → `API_KEYS`. Upload `samples/employee-policy.txt`; ask about annual leave and check the cited 24-day passage. The template key `local-change-me` is for development only.
 
-1. Upload `samples/employee-policy.txt`, version `1`, category `general`.
-2. Wait for a successful upload showing the stored filename and chunk count.
-3. Ask `How many days of annual leave do employees receive?`
-4. Expand a citation and check the passage. The sample policy specifies 24 days.
-5. Upload your own document and choose **Ask about this** in the library. Filters match exact filenames/categories.
+API reference: **http://127.0.0.1:8000/docs**. Stop with **Ctrl+C** and restart with the same command. Keep one worker; stored documents persist.
 
-API documentation is at **http://127.0.0.1:8000/docs**. Stop the API with **Ctrl+C**. Stored documents remain on disk. Restart with the same command and configuration.
-
-## 3. Use PostgreSQL / pgvector
+## 3. PostgreSQL setup
 
 Generate two different secrets locally:
 
@@ -74,7 +37,7 @@ Generate two different secrets locally:
 uv run python -c "import secrets; print(secrets.token_hex(32)); print(secrets.token_hex(32))"
 ```
 
-In `.env`, use the first as the app key and the second as the database password. Replace the placeholders below; do not include angle brackets. Hex passwords avoid URL-encoding issues.
+Edit private `.env`, replace placeholders and keep other Ollama settings:
 
 ```dotenv
 APP_ENV=production
@@ -87,197 +50,84 @@ POSTGRES_PASSWORD=<different-random-db-password>
 DATABASE_URL=postgresql+psycopg://rag:<different-random-db-password>@127.0.0.1:5432/rag
 ```
 
-Keep the other Ollama settings from the example. Stop the API, then run:
+Start Docker Desktop, stop the old API, then:
 
 ```powershell
 docker compose up -d postgres
-docker compose ps
-uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
+uv sync --frozen --no-dev
+uv run --no-dev --frozen uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-This runs the API on your computer and PostgreSQL in Docker. Re-upload documents: switching stores does not migrate them. An embedding model/dimension change also requires a new store and re-ingestion. Do not delete your old store to resolve a configuration error.
+Use the app key on the website, not the DB/provider key. Switching stores requires re-uploading; changing embeddings requires a compatible new store. Changing a password in `.env` does not change an already initialized PostgreSQL role automatically.
 
-### Run the API in Docker too
+### Containerize the API too
 
-Stop the terminal API first, leave host Ollama running, then:
+Stop the terminal API; keep host Ollama running:
 
 ```powershell
 docker compose -f compose.yaml -f compose.ollama.yaml up -d --build
-docker compose -f compose.yaml -f compose.ollama.yaml ps
 docker compose -f compose.yaml -f compose.ollama.yaml logs --tail 100 api
-```
-
-The override connects the API container to host Ollama through `host.docker.internal`. If that connection fails, configure Ollama to accept connections from Docker and restart it. Restrict access with your firewall; keep port 11434 private. The compose files publish the API/database only to localhost.
-
-```powershell
-# Stop containers, keeping them and their data
 docker compose -f compose.yaml -f compose.ollama.yaml stop
-# Start existing containers again
 docker compose -f compose.yaml -f compose.ollama.yaml start
-# Remove containers/network while retaining named volumes
-docker compose -f compose.yaml -f compose.ollama.yaml down
 ```
 
-The database uses the `postgres-data` named volume. Do not add `-v` to `down` unless you deliberately want to delete stored data. Back up and test restoration before deployment.
+After code/environment changes, use `up -d --build`. The override connects to host Ollama; check its listening/firewall settings if unreachable and keep port 11434 private. Named volumes retain data. **Do not delete volumes for ordinary shutdown.** Chroma is a development dependency excluded from the production image.
 
-## Providers and tracing
+## 4. Optional Gemini and LangSmith
 
-| Option | Implemented here | Credentials |
-|---|---|---|
-| Ollama | Real chat + local embeddings | No LLM provider key |
-| OpenAI | Chat + embeddings | `OPENAI_API_KEY` |
-| Demo | Deterministic embeddings and retrieved excerpts; no LLM | None |
-| Gemini | Hosted generation + existing local Ollama embeddings | `GEMINI_API_KEY` |
-| Grok | Not implemented | Adapter needed |
+Create a key at [Google AI Studio](https://aistudio.google.com/apikey). Change/add in existing private `.env`:
 
-For OpenAI, set `MODEL_MODE=openai`, `OPENAI_API_KEY`, `CHAT_MODEL`, `EMBEDDING_MODEL`, and matching `EMBEDDING_DIMENSIONS`. Use a new store when changing embedding configuration. Model names and quotas should be checked in your provider account.
+```dotenv
+MODEL_MODE=gemini
+GEMINI_API_KEY=<your-real-key>
+GEMINI_CHAT_MODEL=gemini-2.5-flash
+GEMINI_TIMEOUT_SECONDS=60
+```
 
-**LangSmith is implemented and opt-in.** Add these to private `.env`, restart, and make a query:
+Keep Ollama and embedding/database/tenant settings unchanged. Gemini generates answers/rewrites; Nomic still embeds, preserving compatible documents. Questions/selected evidence go to Google. Restart/recreate the API. The Gemini template is for fresh development setup, not overwriting existing configuration. OpenAI mode is supported but requires its embedding/store settings; Grok is not implemented.
+
+Create a separate key at [LangSmith](https://smith.langchain.com), then add:
 
 ```dotenv
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=<your-langsmith-key>
 LANGSMITH_PROJECT=production-rag
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
-LANGSMITH_WORKSPACE_ID=
 TRACE_CONTENT=false
 ```
 
-Graph and LangChain model runs appear in the project. Inputs/outputs are hidden by default. Enable `TRACE_CONTENT=true` only when you intend to send questions and document passages to LangSmith. Parsing and SQL operations are not independently instrumented spans. Token usage depends on model reporting; local inference is not a hosted provider bill.
+Restart, ask an uncached question and open **production-rag → rag-question** in tracing. Use your account's region endpoint/workspace ID if required. Inputs/outputs are hidden; `TRACE_CONTENT=true` sends trace content to LangSmith. Never publish keys.
 
-Gemini uses the native [Google LangChain integration](https://docs.langchain.com/oss/python/integrations/chat/google_generative_ai) and participates in the same traces. Grok would still require an adapter. See [LangSmith tracing](https://docs.langchain.com/langsmith/trace-with-langchain).
-
-## Switch to Gemini without re-uploading
-
-Get a key from [Google AI Studio](https://aistudio.google.com/apikey). In your existing private `.env`, change/add:
-
-```dotenv
-MODEL_MODE=gemini
-GEMINI_API_KEY=<your-real-google-key>
-GEMINI_CHAT_MODEL=gemini-2.5-flash
-GEMINI_TIMEOUT_SECONDS=60
-```
-
-Keep your database, tenant keys, Nomic model, dimensions (768), and prefixes unchanged. Gemini generates answers and query rewrites; Ollama still embeds queries/documents. The embedding fingerprint and Chroma collection are unchanged when switching between Ollama and Gemini with the same embedding settings, so existing documents remain searchable. Keep Ollama running. `.env.gemini.example` is a fresh-development template; do not overwrite your existing private configuration with it.
-
-Restart the API after `uv sync --frozen`. Run `uv run python -m scripts.verify_local` for an isolated real Gemini smoke check after configuring the key; it calls the hosted API and may use quota/credits. No live Gemini call is part of ordinary tests. Select another supported Gemini model through `GEMINI_CHAT_MODEL` if your account does not offer the default. Google receives the question and selected evidence (and the original question when rewriting), not your stored vectors.
-
-For LangSmith, open [the dashboard](https://smith.langchain.com), obtain its own API key from account/workspace settings, configure the tracing values above and restart. Ask a new uncached question, open the `production-rag` project under tracing, then the `rag-question` run. Expand retrieve/select/rewrite/answer and model calls. `TRACE_CONTENT=false` hides inputs/outputs; use true only if you intend to send document evidence to LangSmith. EU accounts need `LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com`; use your account's documented region endpoint and workspace ID if required.
-
-## Browse PostgreSQL visually
+## 5. Database viewer
 
 ```powershell
 docker compose --profile tools up -d adminer
 ```
 
-Open **http://127.0.0.1:8080**. Login with System **PostgreSQL**, Server **postgres**, Username **rag**, Database **rag**, and the private `POSTGRES_PASSWORD` from `.env`. This is the database password, not your website app key. Click a table and **Select data** to browse rows; `documents` stores versions and `chunks` stores extracted text, metadata and vectors. Adminer can also modify data, so browse carefully.
+Open **http://127.0.0.1:8080**. System: **PostgreSQL**; server: **postgres**; username/database: **rag**; password: private `POSTGRES_PASSWORD`. Choose **documents/chunks → Select data**. Adminer can modify data. Stop with `docker compose --profile tools stop adminer`.
 
-The optional Adminer service is bound to localhost and needs no database password in its compose definition. Stop it with `docker compose --profile tools stop adminer`. PostgreSQL is local in the persistent Docker volume, not in Supabase unless you explicitly configure a Supabase SQL connection. Original uploaded file bytes are not archived.
-
-To inspect size from PowerShell without an interactive paste:
+Data is local in Docker's persistent PostgreSQL volume; extracted text/metadata/vectors are stored, original uploads are not archived. Check size:
 
 ```powershell
-docker compose exec -T postgres psql -U rag -d rag -c "SELECT pg_size_pretty(pg_database_size('rag')) AS database_size;"
-docker system df
+docker compose exec -T postgres psql -U rag -d rag -c "SELECT pg_size_pretty(pg_database_size('rag'));"
 ```
 
-Database size differs from the complete volume: PostgreSQL also needs system databases, WAL and overhead. Docker images, Python dependencies and downloaded models consume additional space. Local demo/evaluation stores under `data` are independent of the active PostgreSQL store.
-
-## API
-
-All document/query/metrics routes require `X-API-Key`. The key maps to a server-controlled tenant; clients cannot choose another tenant in a request.
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/documents` | Multipart upload: `file`, `version`, `category` |
-| GET | `/documents` | List this tenant's document versions |
-| DELETE | `/documents/{document_id}` | Delete one of this tenant's documents |
-| POST | `/query` | JSON question and optional filters |
-| GET | `/health/live` | Process liveness |
-| GET | `/health/ready` | Storage and local model availability |
-| GET | `/metrics` | Authenticated Prometheus metrics |
-
-Example JSON for `/query`:
-
-```json
-{
-  "question": "What does SEC-401 mean?",
-  "filters": {"filename": "employee-policy.txt", "category": "general"}
-}
-```
-
-Supported filters also include `version` and `document_ids`. Queries use active versions by default. Responses contain `answer`, `citations`, `insufficient_evidence`, `reason`, `mode`, and `cached`. A citation includes a source ID, filename, page, section, version, and excerpt.
-
-## Code map
-
-| File | Responsibility |
-|---|---|
-| `app/config.py` | Settings and production validation |
-| `app/documents.py` | PDF/TXT/Markdown parsing, metadata, splitting, chunk deduplication |
-| `app/storage.py` | SQL catalog, versions, tenant filtering, vector + keyword retrieval |
-| `app/pipeline.py` | Model adapters, fusion, reranking, graph, evidence validation |
-| `app/main.py` | API, auth, limits, cache, health, metrics, static serving |
-| `static/index.html`, `styles.css`, `app.js` | Browser interface, styling, interactions |
-| `scripts/export_chunks.py` | Export persistent chunk IDs for evaluation labels |
-| `scripts/evaluate.py` | Semantic/keyword/fused/reranked Recall@K and MRR; optional generation |
-| `scripts/demo_evaluation.py` | Isolated sample evaluation |
-| `scripts/verify_local.py` | Actual Ollama/reranker smoke checks in a temporary local store |
-| `tests/` | API, tenant isolation, Gemini/Ollama provider validation, citations, parsing, retrieval regressions |
-| `.github/workflows/checks.yml` | CI with a real pgvector database |
-| `Dockerfile`, `compose*.yaml` | Container image and deployment definitions |
-| `pyproject.toml`, `uv.lock` | Dependencies and reproducible versions |
-| `.env*.example` | Public demo, Ollama and Gemini templates; not real credentials |
-
-## Test and evaluate
+## 6. Verify
 
 ```powershell
+uv sync --frozen
 uv run pytest -q
 uv run ruff check app tests scripts
 uv run ruff format --check app tests scripts
 uv run python -m scripts.demo_evaluation
-uv run python -m scripts.verify_local
 ```
 
-Ordinary tests use fake/demo models and do not spend API credits. The verification requires running Ollama and checks supported and unsupported sample questions with the configured Ollama or Gemini generator. The PostgreSQL test runs only when `TEST_DATABASE_URL` is set; CI supplies it. Use a dedicated test database.
+`uv run python -m scripts.verify_local` checks actual Ollama/Gemini answers in an isolated store; hosted calls use quota/credits. Ordinary tests do not make paid model calls. PostgreSQL integration needs a separate test DB via `TEST_DATABASE_URL`; CI supplies one.
 
-For your own documents, export chunks, label relevant IDs by reading the passages, then evaluate:
+For real evaluation, export IDs with `uv run python -m scripts.export_chunks --tenant my-company`, manually label JSONL questions and run `uv run python -m scripts.evaluate <dataset> --tenant my-company --k 5`; add `--generate` for answers. Data/reports stay private.
 
-```powershell
-New-Item -ItemType Directory -Force data | Out-Null
-uv run python -m scripts.export_chunks --tenant my-company | Out-File -Encoding utf8 data/chunks.jsonl
-uv run python -m scripts.evaluate data/questions.jsonl --tenant my-company --k 5 --output data/evaluation.json
-```
+## Deployment boundaries
 
-Each dataset line is a JSON object:
+Services bind to localhost. Public use needs HTTPS, identity/authorization, restricted DB roles, tested backups and load/quality checks. Uploads are synchronous; locks/cache/rate limits support one process. Citations validate IDs, not every claim's truth.
 
-```json
-{"question":"What does SEC-401 mean?","filters":{"category":"general"},"relevant_chunk_ids":["actual-chunk-id"],"expected_answer_terms":["certificate"]}
-```
-
-Add `--generate` to evaluate answers too; hosted models may incur charges. Answer term recall is a smoke metric, not proof of correctness. Review grounding, completeness, citation support, and abstention on your real data.
-
-## Operational boundaries
-
-- PDF extraction handles text PDFs, not OCR or reliable table reconstruction.
-- Local keyword retrieval is BM25; PostgreSQL uses English full-text search, which is not BM25.
-- PostgreSQL vector queries currently use exact search over eligible tenant/filter rows. HNSW is created but is not used by that query shape; benchmark before scaling.
-- SQL tenant predicates enforce application access. Enabled RLS with no public policies blocks ordinary Supabase API access, but the backend database owner can bypass RLS. It is not per-user JWT/RLS authorization.
-- Citation IDs are validated; this does not mathematically verify every claim against its passage. Human evaluation remains necessary.
-- One process holds cache/rate limits/locks. Multiple workers/replicas require shared coordination and consistent database snapshots.
-- No background ingestion queue, OCR, enterprise login, managed migrations, automatic freshness scheduler, backup automation, or public TLS proxy is bundled.
-
-Before public use: add HTTPS and your identity layer, use restricted database roles and secrets management, test restore procedures, evaluate tenant isolation and quality, measure load/latency, and configure alerting. Supabase can host PostgreSQL/pgvector; use its private SQL connection, not a public browser database key.
-
-## Troubleshooting
-
-| Symptom | Check |
-|---|---|
-| No evidence after uploading | Confirm the successful response names the intended file; inspect library, active version, exact filters and extracted text |
-| 401 | Use the app key from `API_KEYS`, not a provider key |
-| 409 upload | Same filename/version has different content; use a new version |
-| 503 readiness | PostgreSQL connection, running Ollama, downloaded model tags |
-| Embedding configuration changed | Use a new store and re-ingest; keep the old store backed up |
-| Port 8000 in use | Stop the existing API/container before starting another |
-| LangSmith has no traces | Enable tracing, supply its own key/project, restart, then make an uncached query |
-
-Secrets, document stores, uploads, caches, logs, virtual environments, and local learning documents are excluded from Git. Only this README is published as Markdown.
+The 2026-10-06 audit found no known vulnerabilities in production dependencies; development Chroma retains server-path advisories and must not be exposed as an HTTP service. Secrets/stores/caches/local docs are excluded from Git/Docker context. This is a production-style implementation, not a security certification.

@@ -121,6 +121,14 @@ def create_app(settings=None):
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self'; style-src 'self'; "
+                "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+                "base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+            )
         REQUESTS.labels(request.method, str(response.status_code)).inc()
         LATENCY.observe(time.monotonic() - start)
         return response
@@ -167,7 +175,11 @@ def create_app(settings=None):
         try:
             chunks = parse_chunks(data, filename, settings, category, version)
         except Exception as exc:
-            raise HTTPException(422, "Could not parse document: " + str(exc)[:200]) from exc
+            # Parser exceptions can contain snippets of private uploaded text.
+            raise HTTPException(
+                422,
+                "Could not parse document. Use a readable PDF or UTF-8 TXT/Markdown within configured limits.",
+            ) from exc
         embeddings = app.state.models.embed([c["text"] for c in chunks])
         with mutation_lock:
             try:
