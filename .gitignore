@@ -18,6 +18,7 @@ screenshots/
 *.md
 *.MD
 !/README.md
+!/PROJECT_GUIDE.md
 .DS_Store
 __pycache__/
 .pytest_cache/

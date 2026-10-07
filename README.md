@@ -2,11 +2,15 @@
 
 Upload documents and ask questions with hybrid retrieval, reranking and citations. FastAPI serves the browser interface/API. Choose Ollama locally, Gemini with local embeddings, or OpenAI.
 
-This README covers setup. `PROJECT_GUIDE.md` is the concise local project explanation; it stays off GitHub because only README is published as Markdown.
+This README covers setup on a new device. Read [PROJECT_GUIDE.md](PROJECT_GUIDE.md) for the plain-language explanation and code references. Both documents are included in the repository.
 
 ## 1. Install
 
 Use Python 3.12/3.13, [uv](https://docs.astral.sh/uv/getting-started/installation/), [Ollama](https://ollama.com/download) and Docker Desktop with Linux containers. Commands use PowerShell from the project folder.
+
+On a new device, first install [Git](https://git-scm.com/downloads), [Python](https://www.python.org/downloads/), uv, Ollama, and [Docker Desktop](https://docs.docker.com/desktop/). Open Docker Desktop and Ollama, then reopen your terminal so installed commands are available. Docker is required for PostgreSQL; local Chroma setup can run without it. Allow several GB for downloaded models and Python packages. A GPU helps local generation but is not required.
+
+Check installation with `git --version`, `uv --version`, `ollama --version`, and `docker version`. Docker's server section requires its engine to be running.
 
 ```powershell
 git clone https://github.com/RiyanBhargava/production-rag.git
@@ -18,6 +22,10 @@ ollama pull nomic-embed-text:latest
 ```
 
 Keep Ollama running. If it is not already serving, start `ollama serve` in another terminal. Preserve an existing `.env`. First startup downloads the reranker.
+
+The repository includes source, frontend assets, scripts/tests, sample TXT, dependency lockfile, Docker definitions and configuration templates. Private `.env`, virtual environments, models and document databases are not included. Each new device creates/downloads these locally. Re-upload documents unless you separately restore a compatible private database backup.
+
+On macOS/Linux, use the same `git`, `uv`, `ollama` and API commands; replace the PowerShell copy line with `test -f .env || cp .env.ollama.example .env`. Docker with host Ollama is simplest on Docker Desktop. On Linux Docker Engine, use the terminal API + PostgreSQL route to avoid host-container Ollama networking differences.
 
 ## 2. Start and try it
 
@@ -75,7 +83,7 @@ After code/environment changes, use `up -d --build`. The override connects to ho
 
 ## 4. Optional Gemini and LangSmith
 
-Create a key at [Google AI Studio](https://aistudio.google.com/apikey). Change/add in existing private `.env`:
+Sign in to [Google AI Studio](https://aistudio.google.com/apikey), create an API key, and choose/create its Google Cloud project if prompted. Copy the key into private `.env`; follow Google's [key setup instructions](https://ai.google.dev/gemini-api/docs/api-key) if your account needs project setup. Check the account's quota/billing before using hosted models. Change/add:
 
 ```dotenv
 MODEL_MODE=gemini
@@ -84,9 +92,9 @@ GEMINI_CHAT_MODEL=gemini-2.5-flash
 GEMINI_TIMEOUT_SECONDS=60
 ```
 
-Keep Ollama and embedding/database/tenant settings unchanged. Gemini generates answers/rewrites; Nomic still embeds, preserving compatible documents. Questions/selected evidence go to Google. Restart/recreate the API. The Gemini template is for fresh development setup, not overwriting existing configuration. OpenAI mode is supported but requires its embedding/store settings; Grok is not implemented.
+Keep Ollama and embedding/database/tenant settings unchanged. Gemini generates answers/rewrites; Nomic still embeds, preserving compatible documents. Questions/selected evidence go to Google. Restart/recreate the API. The Gemini template is for fresh development setup, not overwriting existing configuration. Grok is not implemented.
 
-Create a separate key at [LangSmith](https://smith.langchain.com), then add:
+Sign up/sign in to [LangSmith](https://smith.langchain.com), open **Settings > API Keys**, choose a personal key for your own development or a workspace service key for the application, and click **Create API Key**. Copy it immediately; it is shown once. See the [official account/key instructions](https://docs.langchain.com/langsmith/create-account-api-key). Then add:
 
 ```dotenv
 LANGSMITH_TRACING=true
@@ -98,7 +106,41 @@ TRACE_CONTENT=false
 
 Restart, ask an uncached question and open **production-rag → rag-question** in tracing. Use your account's region endpoint/workspace ID if required. Inputs/outputs are hidden; `TRACE_CONTENT=true` sends trace content to LangSmith. Never publish keys.
 
+### Optional OpenAI instead
+
+Sign in to the [OpenAI API dashboard](https://platform.openai.com/api-keys), select your project, create a secret API key, and copy it into `.env`. Set up API billing/credits if your account requires them; follow the [official quickstart](https://developers.openai.com/api/docs/quickstart).
+
+For a **fresh development store**, keep your app key and tracing settings, and change:
+
+```dotenv
+APP_ENV=development
+STORAGE_BACKEND=chroma
+DATA_DIR=./data-openai
+MODEL_MODE=openai
+OPENAI_API_KEY=<your-openai-key>
+CHAT_MODEL=gpt-4.1-mini
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+RERANKER_MODE=cross_encoder
+```
+
+Run `uv sync --frozen`, restart the API, and re-upload documents. OpenAI sends both embedding text and answer context to its service. For PostgreSQL, use a separate database initialized with the new embedding settings; do not reuse the 768-dimensional Ollama store.
+
+### Which secret goes where?
+
+| Setting | Where it comes from | Where you use it |
+| --- | --- | --- |
+| `API_KEYS` | Generate a random secret yourself (command in section 3) | Website's app-key field; the JSON value identifies its tenant |
+| `POSTGRES_PASSWORD` | Generate a different random secret yourself | PostgreSQL, matching password in `DATABASE_URL`, and Adminer |
+| `GEMINI_API_KEY` | Google AI Studio | Backend `.env` only, when using Gemini |
+| `OPENAI_API_KEY` | OpenAI API dashboard | Backend `.env` only, when using OpenAI |
+| `LANGSMITH_API_KEY` | LangSmith Settings | Backend `.env` only, when enabling tracing |
+
+Ollama needs no provider API key. For example, with `API_KEYS={"your-generated-secret":"my-company"}`, enter only `your-generated-secret` on the website. Provider keys cannot be arbitrary strings: they must be issued by the provider. Keep `.env` private, replace template app keys before sharing access, and restart the backend after editing settings. Never put provider keys into frontend code.
+
 ## 5. Database viewer
+
+Complete the PostgreSQL setup in section 3 first. This viewer shows PostgreSQL data; it does not show a Chroma development store.
 
 ```powershell
 docker compose --profile tools up -d adminer
@@ -130,4 +172,4 @@ For real evaluation, export IDs with `uv run python -m scripts.export_chunks --t
 
 Services bind to localhost. Public use needs HTTPS, identity/authorization, restricted DB roles, tested backups and load/quality checks. Uploads are synchronous; locks/cache/rate limits support one process. Citations validate IDs, not every claim's truth.
 
-The 2026-10-06 audit found no known vulnerabilities in production dependencies; development Chroma retains server-path advisories and must not be exposed as an HTTP service. Secrets/stores/caches/local docs are excluded from Git/Docker context. This is a production-style implementation, not a security certification.
+The 2026-10-06 audit found no known vulnerabilities in production dependencies; development Chroma retains server-path advisories and must not be exposed as an HTTP service. Secrets/stores/caches are excluded from Git and Docker context; documentation is excluded from the Docker image. This is a production-style implementation, not a security certification.
