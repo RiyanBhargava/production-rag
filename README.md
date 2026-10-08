@@ -1,10 +1,10 @@
 # Production RAG
 
-## Explain the project before the demo
+## Explanation of the project
 
 > I built a document question-answering application for operational knowledge. Users upload PDF, TXT or Markdown files. The system extracts their text, splits it into smaller passages and stores the passages with searchable vectors and document details. For a question, it combines semantic and keyword search, merges the results, reranks them and selects a limited amount of evidence. It can rewrite a weak search and retry before generating an answer.
 >
-> Automatic routing starts simple factual lookups on Llama 1B and uses Llama 3B for comparisons, summaries or larger evidence. A failed small-model response can get one larger-model fallback. Answers include source passages you can inspect; missing evidence or invalid output can produce a refusal. The workspace also supports document versions, duplicate-upload detection, filters, deletion, separate tenant access and cached answers.
+> Automatic routing starts simple factual lookups on Llama 1B and uses Llama 3B for comparisons, summaries or larger evidence. A failed small-model response can get one larger-model fallback. Answers include source passages you can inspect; missing evidence or invalid output can produce a refusal. The workspace also supports document versions, duplicate-upload detection, filters, deletion, separate tenant access and cached answers. Browser demo tools link the database/SQL viewer, API explorer and LangSmith, and show health, metrics and query details.
 >
 > Everything runs locally except enabled LangSmith monitoring, which receives prompts, retrieved evidence and responses so I can inspect model choices, fallback, timing, errors and reported tokens. Health checks, metrics, automated tests and retrieval evaluation help me check whether the application works.
 
@@ -30,25 +30,25 @@
 
 Application keys scope data to workspaces; request/upload/context limits bound resource use. Identical questions can use a five-minute cache, and document changes prevent stale reuse. Original files are not archived. Gemini/OpenAI are optional providers; SQLite/Chroma and fake-model mode support development. The current setup uses one worker and does not include user accounts, OCR, streaming or automatic document syncing. Routing may need fallback and is not guaranteed to make answers faster.
 
-## Features to introduce before the demo
+## Features
 
 | Feature | What it does | Implementation |
-|---|---|---|
-| Document ingestion | Reads text-based PDF, UTF-8 TXT and Markdown; preserves metadata and chunks text | [documents.py](app/documents.py) |
-| Hybrid retrieval | Finds semantic matches and exact keyword matches in tenant-scoped documents | [storage.py](app/storage.py) |
-| Fusion and reranking | Combines ranked lists, then scores question-passage pairs | [pipeline.py](app/pipeline.py) |
-| Grounded answers | Requests supported claims with source IDs; attaches stored source excerpts | [pipeline.py](app/pipeline.py) |
-| Refusal and rewriting | Refuses missing/invalid evidence and conditionally retries retrieval | [pipeline.py](app/pipeline.py) |
-| Automatic local routing | Starts factual lookups on 1B and uses 3B for synthesis or complex context | [routing.py](app/routing.py) |
-| Model activity | Shows initial route, final model, fallback and cache status | [app.js](static/app.js) |
-| Document lifecycle | Deduplication, categories, filters, latest/historical versions and API deletion | [storage.py](app/storage.py) |
-| Tenant isolation | Application keys identify workspaces and restrict document access | [main.py](app/main.py) |
-| Caching and limits | Reuses identical queries and bounds requests, uploads and context | [main.py](app/main.py), [config.py](app/config.py) |
+| --- | --- | --- |
+| Document ingestion | Reads text-based PDF, UTF-8 TXT and Markdown; preserves metadata and chunks text | documents.py |
+| Hybrid retrieval | Finds semantic matches and exact keyword matches in tenant-scoped documents | storage.py |
+| Fusion and reranking | Combines ranked lists, then scores question-passage pairs | pipeline.py |
+| Grounded answers | Requests supported claims with source IDs; attaches stored source excerpts | pipeline.py |
+| Refusal and rewriting | Refuses missing/invalid evidence and conditionally retries retrieval | pipeline.py |
+| Automatic local routing | Starts factual lookups on 1B and uses 3B for synthesis or complex context | routing.py |
+| Model activity | Shows initial route, final model, fallback and cache status | app.js |
+| Document lifecycle | Deduplication, categories, version filters and browser deletion | storage.py |
+| Tenant isolation | Application keys identify workspaces and restrict document access | main.py |
+| Caching and limits | Reuses identical queries and bounds requests, uploads and context | main.py, config.py |
 | Persistent local storage | PostgreSQL text, metadata and vectors survive container restarts | [compose.yaml](compose.yaml) |
-| Monitoring | LangSmith execution traces, health endpoints and Prometheus metrics | [main.py](app/main.py) |
+| Monitoring | LangSmith execution traces, health endpoints and Prometheus metrics | main.py |
 | Evaluation | Retrieval Recall@K/MRR, automated regressions and real-model smoke checks | [scripts](scripts), [tests](tests) |
 
-## Demo: exactly what to run and show
+## Demo
 
 Use the existing private `.env` and installed models. Full tracing/routing are already enabled. Keep Docker Desktop and Ollama open; do not start a second Ollama server. These instructions do not start services until you run them.
 
@@ -73,7 +73,7 @@ Expect `ready / ollama / postgres`. Open **http://127.0.0.1:8000**, paste the co
 
 ### 2. Upload and show ingestion
 
-Upload [samples/model-routing-demo.txt](samples/model-routing-demo.txt), **version `3`**, **category `demo`**. Wait for confirmation. Confirm query filters: category `demo`, filename `model-routing-demo.txt`.
+Upload samples/model-routing-demo.txt, **version** `3`, **category** `demo`. Wait for confirmation. Confirm query filters: category `demo`, filename `model-routing-demo.txt`.
 
 Show the library, Refresh library and Ask about this. Re-upload the identical filename/version to show duplicate detection. PDF/Markdown support can be shown by uploading a small text-based file and asking a fact from it.
 
@@ -82,7 +82,7 @@ Latest means the most recently uploaded version, not the largest version number.
 ### 3. Ask and inspect the answers
 
 | Input | What to show |
-|---|---|
+| --- | --- |
 | **How many minutes does support have to acknowledge a withdrawal complaint?** | 15 minutes; initial 1B route, actual final model and any 3B fallback |
 | **What happens if a standard withdrawal review exceeds 24 hours?** | Escalation to payments operations; retrieval of an exact policy detail |
 | **What is the company policy on flying to Mars?** | Insufficient evidence without citations |
@@ -94,7 +94,7 @@ For the larger-model example, ask:
 
 Show the **3B** route. Check acknowledgement within 15 minutes, security escalation, keeping the hold, no verification bypass/release, and a customer update without exposing detection rules. Standard reviews are within 24 hours after verification; overdue reviews escalate to payments operations.
 
-Expand citations to inspect filename, version, page/section and excerpt. Show Copy answer and the Model activity panel. The factual example can fall back to 3B; do not promise a 1B-only answer. Set category to `nonexistent-demo-category` and ask a new question to show excluded evidence, then restore `demo`.
+Expand citations to inspect filename, version, page/section and excerpt. Show Copy answer, Model activity and Inspect query request and response for the API JSON. The factual example can fall back to 3B; do not promise a 1B-only answer. Set category to `nonexistent-demo-category` and ask a new question to show excluded evidence, then restore `demo`.
 
 ### 4. Show LangSmith
 
@@ -108,29 +108,29 @@ Click **View traces**, sign in at [LangSmith](https://smith.langchain.com), and 
 
 Cached requests have no new generation span. Rephrase a question for a fresh model trace; delivery can take a few seconds. Rewriting is conditional, so it may not appear on every question. Upload/parsing/SQL do not have dedicated detailed spans, and local electricity cost/private model reasoning are not shown.
 
-### 5. Show database, API, versions and deletion
+### 5. Show everything from the website
 
-Open **http://127.0.0.1:8080**: PostgreSQL, server `postgres`, username/database `rag`, password from `.env` -> `POSTGRES_PASSWORD`. Show **documents**, **chunks** and **rag_config**: extracted text, metadata and vectors.
+Use **Demo tools / Health & metrics** in the sidebar:
 
-Open **http://127.0.0.1:8000/docs**, Authorize with the app key, then show:
+| Website control | What to demonstrate |
+| --- | --- |
+| **Check health** | Process and database/model readiness responses, displayed on the page |
+| **Load metrics** | API request counts and latency buckets; uses the connected app key |
+| **Database & SQL** | Opens Adminer in a browser tab: PostgreSQL, server `postgres`, username/database `rag`, password from `.env` -> `POSTGRES_PASSWORD` |
+| **API explorer** | Opens `/docs` in a browser tab; Authorize with the app key and try list/upload/query/delete/metrics endpoints |
+| **LangSmith traces** | Opens the tracing service in a browser tab; sign in and choose `production-rag` |
+| **Query request and response** | Expand under an answer to inspect submitted filters and returned answer/citations/routing JSON |
+| **Version filter / Ask this version** | Upload a disposable TXT, change one fact, upload a new version, then query each version from the page |
+| **Delete** in the library | Confirm deletion of the disposable version; verify the library updates |
 
-| Action | Endpoint/check |
-|---|---|
-| List uploaded versions | `GET /documents` |
-| Inspect request counts/latency | `GET /metrics` |
-| Check process/dependencies | `GET /health/live`, `GET /health/ready` |
-| Demonstrate authentication | A protected request without a valid key returns 401 |
-| Demonstrate versions | Upload a disposable TXT, change one fact, then upload under the same filename with a new version |
-| Query the earlier version | `POST /query` with question and filters containing filename plus version |
-| Delete the disposable version | `DELETE /documents/{document_id}`; confirm it disappears from the list |
+In Adminer, show **documents**, **chunks** and **rag_config**. Open **SQL command** and run a read-only example:
 
-Historical query example; replace filename/version with your disposable upload:
-
-```json
-{"question":"What does the policy require?","filters":{"filename":"version-demo.txt","version":"1"}}
+```sql
+SELECT filename, version, category, active FROM documents ORDER BY created_at DESC;
+SELECT COUNT(*) AS stored_passages FROM chunks;
 ```
 
-Historical-version selection and deletion are API features. Keep the main trading sample intact. Separate-tenant isolation is covered by the automated tests.
+Keep the main trading sample intact. Database/API/LangSmith are separate browser tools launched from the main page; health, metrics, historical queries and deletion work in the workspace itself. Separate-tenant isolation is covered by automated tests.
 
 ### 6. Show verification and evaluation
 
@@ -141,7 +141,7 @@ uv run --frozen python -m scripts.check_docker
 
 The live verifier checks both samples: auth/assets, routing, answers, summaries, refusal, citations, cache, library and metrics. It pins fixture versions and writes `data/running-stack-verification.json`; use `--sample trading` for only the trading fixture.
 
-The Docker checker runs tests, lint, formatting and sample retrieval evaluation using a separate `rag_test` database. Show the test result and **Recall@K** (relevant passages found) / **MRR** (how early they appear). These are sample checks, not proof of perfect answers. For your own labeled evaluation, see [export_chunks.py](scripts/export_chunks.py) and [evaluate.py](scripts/evaluate.py).
+The Docker checker runs tests, lint, formatting and sample retrieval evaluation using a separate `rag_test` database. Show the test result and **Recall@K** (relevant passages found) / **MRR** (how early they appear). These are sample checks, not proof of perfect answers. For your own labeled evaluation, see export_chunks.py and evaluate.py.
 
 ### 7. Show persistence and stop
 

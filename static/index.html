@@ -21,9 +21,11 @@
         ><span aria-hidden="true">▤</span> Document library</a
       >
       <a class="nav-item" href="/docs" target="_blank" rel="noopener"
-        ><span aria-hidden="true">↗</span> API reference</a
+        ><span aria-hidden="true">↗</span> API explorer</a
       >
       <a class="nav-item" href="https://smith.langchain.com" target="_blank" rel="noopener"><span aria-hidden="true">&#8599;</span> View traces</a>
+      <a class="nav-item" href="http://127.0.0.1:8080" target="_blank" rel="noopener"><span aria-hidden="true">&#9641;</span> Database &amp; SQL</a>
+      <a class="nav-item" href="#demo-tools"><span aria-hidden="true">&#9673;</span> Health &amp; metrics</a>
       <div class="sidebar-note">
         <span class="small-dot"></span> Evidence comes first
         <p>Answers grounded in your documents, with sources you can inspect.</p>
@@ -175,7 +177,10 @@
                       maxlength="255"
                   /></label>
                 </div>
-                <p>Use a filename to ask about one specific document.</p>
+                <div class="form-row">
+                  <label>Version<input id="version-filter" placeholder="Latest upload" maxlength="100" /></label>
+                </div>
+                <p>Leave version blank for the latest upload, or choose a historical version.</p>
               </details>
               <button class="button primary" id="ask" type="submit">
                 Find an answer <span aria-hidden="true">↗</span>
@@ -221,6 +226,11 @@
             <p id="routing-reason"></p>
           </section>
           <div id="sources" class="sources"></div>
+          <details id="query-details" class="query-details" hidden>
+            <summary>Inspect query request and response</summary>
+            <h3>Request</h3><pre id="query-request" class="inspector-output"></pre>
+            <h3>Response</h3><pre id="query-response" class="inspector-output"></pre>
+          </details>
         </section>
         <section
           class="card library-card"
@@ -241,6 +251,29 @@
             Connect to see your documents.
           </p>
           <div id="documents" class="document-list"></div>
+        </section>
+        <section class="card tools-card" id="demo-tools" aria-labelledby="tools-title">
+          <p class="eyebrow">DEMO TOOLS</p>
+          <h2 id="tools-title">Inspect your workspace</h2>
+          <p class="subtitle">Open the database, explore API endpoints, and inspect service health and request metrics.</p>
+          <div class="tool-links">
+            <a class="button secondary" href="http://127.0.0.1:8080" target="_blank" rel="noopener">Database &amp; SQL &#8599;</a>
+            <a class="button secondary" href="/docs" target="_blank" rel="noopener">API explorer &#8599;</a>
+            <a class="button secondary" href="https://smith.langchain.com" target="_blank" rel="noopener">LangSmith traces &#8599;</a>
+          </div>
+          <p class="inline-status">Database: PostgreSQL, server postgres, username/database rag. Use POSTGRES_PASSWORD from your private .env. Run SQL in Adminer's SQL command view. API explorer uses your application key; LangSmith uses your account. These tools open in new tabs.</p>
+          <div class="tools-grid">
+            <div class="tool-panel">
+              <div class="answer-heading"><h3>Service health</h3><button id="check-health" type="button" class="button secondary">Check health</button></div>
+              <p id="health-status" class="inline-status" role="status">Check process and dependency availability.</p>
+              <pre id="health-output" class="inspector-output" hidden></pre>
+            </div>
+            <div class="tool-panel">
+              <div class="answer-heading"><h3>Request metrics</h3><button id="load-metrics" type="button" class="button secondary">Load metrics</button></div>
+              <p id="metrics-status" class="inline-status" role="status">Connect first to view request counts and latency.</p>
+              <pre id="metrics-output" class="inspector-output" hidden></pre>
+            </div>
+          </div>
         </section>
         <footer class="page-footer">
           Check important claims against their cited passages.<span

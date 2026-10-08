@@ -9,13 +9,14 @@ function status(id, message, kind = "") {
   el(id).className = `inline-status ${kind}`;
 }
 
-async function api(path, options = {}) {
+async function api(path, options = {}, responseType = "json") {
   if (!el("key").value.trim())
     throw new Error("Enter your application API key and connect first.");
   const response = await fetch(path, {
     ...options,
     headers: { "X-API-Key": el("key").value.trim(), ...options.headers },
   });
+  if (response.ok && responseType === "text") return response.text();
   let data;
   try {
     data = await response.json();
@@ -43,9 +44,10 @@ async function run(buttonId, statusId, work) {
   busy = true;
   const button = el(buttonId),
     original = button.textContent;
-  ["connect", "upload", "ask", "list"].forEach((id) => {
+  ["connect", "upload", "ask", "list", "check-health", "load-metrics"].forEach((id) => {
     el(id).disabled = true;
   });
+  document.querySelectorAll("[data-document-action]").forEach((action) => { action.disabled = true; });
   el("key").disabled = true;
   button.textContent = "Working…";
   status(statusId, "Working…");
@@ -56,9 +58,10 @@ async function run(buttonId, statusId, work) {
   } finally {
     busy = false;
     button.textContent = original;
-    ["connect", "upload", "ask", "list"].forEach((id) => {
+    ["connect", "upload", "ask", "list", "check-health", "load-metrics"].forEach((id) => {
       el(id).disabled = false;
     });
+    document.querySelectorAll("[data-document-action]").forEach((action) => { action.disabled = false; });
     el("key").disabled = false;
   }
 }
@@ -102,18 +105,36 @@ function renderDocuments(documents) {
     const focus = document.createElement("button");
     focus.type = "button";
     focus.className = "button quiet";
-    focus.textContent = "Ask about this";
+    focus.textContent = doc.active ? "Ask about this" : "Ask this version";
+    focus.dataset.documentAction = "query";
     focus.addEventListener("click", () => {
       el("filename-filter").value = doc.filename;
       el("filter").value = doc.category;
+      el("version-filter").value = doc.active ? "" : doc.version;
       el("question").focus();
       el("query-form").scrollIntoView({ behavior: "smooth", block: "center" });
       status(
         "status",
-        `Search focused on ${doc.filename}. The latest version is used by default.`,
+        `Search focused on ${doc.filename}, ${doc.active ? "latest upload" : `version ${doc.version}`}.`,
       );
     });
-    actions.append(active, focus);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "button quiet danger";
+    remove.dataset.documentAction = "delete";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => {
+      if (busy || !window.confirm(`Delete ${doc.filename}, version ${doc.version}? This removes this document version and its stored passages.`)) return;
+      run("list", "library-status", async () => {
+        await api(`/documents/${encodeURIComponent(doc.id)}`, { method: "DELETE" });
+        await refreshLibrary();
+        clearAnswer();
+        if (el("filename-filter").value === doc.filename && el("version-filter").value === doc.version) el("version-filter").value = "";
+        status("library-status", `Deleted ${doc.filename}, version ${doc.version}.`, "success");
+        status("status", "Document removed. Ask again to use the remaining evidence.");
+      });
+    });
+    actions.append(active, focus, remove);
     row.append(icon, info, actions);
     el("documents").append(row);
   }
@@ -142,18 +163,16 @@ el("connect-form").addEventListener("submit", (event) => {
 el("key").addEventListener("input", () => {
   el("documents").replaceChildren();
   el("document-count").textContent = "0";
-  el("answer").hidden = true;
-  el("sources").replaceChildren();
-  el("answer-empty").hidden = false;
-  el("answer-meta").hidden = true;
-  el("routing-panel").hidden = true;
-  el("copy").disabled = true;
-  lastAnswer = "";
+  clearAnswer();
+  el("metrics-output").textContent = "";
+  el("metrics-output").hidden = true;
+  status("metrics-status", "Connect first to view request counts and latency.");
   status("connection-status", "Key changed. Connect to load this workspace.");
   status("library-status", "Connect to see your documents.");
   status("status", "");
   el("filter").value = "";
   el("filename-filter").value = "";
+  el("version-filter").value = "";
 });
 el("file").addEventListener("change", () => chooseFile(el("file").files[0]));
 ["dragenter", "dragover"].forEach((name) =>
@@ -189,6 +208,7 @@ el("upload-form").addEventListener("submit", (event) => {
     );
     el("filename-filter").value = result.filename;
     el("filter").value = result.category;
+    el("version-filter").value = "";
     el("file-description").textContent = "Stored in your workspace";
     try {
       await refreshLibrary();
@@ -213,6 +233,20 @@ document.querySelectorAll("[data-question]").forEach((button) =>
     el("question").focus();
   }),
 );
+
+function clearAnswer() {
+  el("answer").textContent = "";
+  el("answer").hidden = true;
+  el("sources").replaceChildren();
+  el("answer-empty").hidden = false;
+  el("answer-meta").hidden = true;
+  el("routing-panel").hidden = true;
+  el("query-details").hidden = true;
+  el("query-request").textContent = "";
+  el("query-response").textContent = "";
+  el("copy").disabled = true;
+  lastAnswer = "";
+}
 
 function renderAnswer(data, seconds) {
   lastAnswer = data.answer;
@@ -291,24 +325,24 @@ el("query-form").addEventListener("submit", (event) => {
     if (el("filter").value.trim()) filters.category = el("filter").value.trim();
     if (el("filename-filter").value.trim())
       filters.filename = el("filename-filter").value.trim();
-    el("answer").hidden = true;
-    el("sources").replaceChildren();
-    el("answer-meta").hidden = true;
-    el("routing-panel").hidden = true;
-    el("copy").disabled = true;
-    lastAnswer = "";
+    if (el("version-filter").value.trim()) filters.version = el("version-filter").value.trim();
+    clearAnswer();
     el("answer-empty").hidden = true;
     status(
       "status",
       "Searching your documents and preparing a grounded answer…",
     );
     const start = performance.now();
+    const request = { question, filters };
     const data = await api("/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, filters }),
+      body: JSON.stringify(request),
     });
     renderAnswer(data, (performance.now() - start) / 1000);
+    el("query-request").textContent = JSON.stringify(request, null, 2);
+    el("query-response").textContent = JSON.stringify(data, null, 2);
+    el("query-details").hidden = false;
   });
 });
 el("copy").addEventListener("click", async () => {
@@ -335,3 +369,30 @@ el("copy").addEventListener("click", async () => {
     el("service-status").textContent = "Service unavailable";
   }
 })();
+
+
+el("check-health").addEventListener("click", () =>
+  run("check-health", "health-status", async () => {
+    el("health-output").hidden = true;
+    const results = {};
+    let ready = true;
+    for (const name of ["live", "ready"]) {
+      const response = await fetch(`/health/${name}`);
+      results[name] = { http_status: response.status, ...await response.json() };
+      if (!response.ok) ready = false;
+    }
+    el("health-output").textContent = JSON.stringify(results, null, 2);
+    el("health-output").hidden = false;
+    status("health-status", ready ? "Process and dependencies are available." : "A health check failed. Inspect the response below.", ready ? "success" : "error");
+  }),
+);
+el("load-metrics").addEventListener("click", () =>
+  run("load-metrics", "metrics-status", async () => {
+    el("metrics-output").hidden = true;
+    const metrics = await api("/metrics", {}, "text");
+    const appMetrics = metrics.split("\n").filter((line) => line.startsWith("rag_") || line.startsWith("# HELP rag_")).join("\n");
+    el("metrics-output").textContent = appMetrics || "No application metrics yet.";
+    el("metrics-output").hidden = false;
+    status("metrics-status", "Request counts and latency buckets from the API process. Reload after more requests.", "success");
+  }),
+);
