@@ -6,6 +6,23 @@
 
 RAG means **Retrieval-Augmented Generation**. Uploading makes a document searchable; it does not train the models. The trading-support example is fictional and contains no real company policies.
 
+### What each part of my local setup does
+
+- **FastAPI:** Handles uploads and questions, and serves the website.
+- **Docker:** Runs the application and database in separate containers.
+- **PostgreSQL:** Stores document text, versions and other details.
+- **pgvector:** Lets PostgreSQL search document vectors by similarity.
+- **Ollama:** Runs the AI models on my laptop.
+- **Llama 1B and 3B:** Generate answers; routing chooses the smaller or larger model.
+- **Nomic embeddings:** Convert text into numbers used to find similar passages.
+- **Reranker:** Moves the most relevant retrieved passages to the top.
+- **LangChain:** Connects the application to models and text-processing tools.
+- **LangGraph:** Controls the search, retry, routing and answer steps.
+- **LangSmith:** Shows prompts, responses, model choices, timing and errors.
+- **Adminer:** Lets me inspect the database in a browser.
+- **uv:** Installs and runs the project's Python dependencies.
+- **.env:** Holds the application's settings and private keys.
+
 ## Features to introduce before the demo
 
 | Feature | What it does | Implementation |
