@@ -73,11 +73,13 @@ Expect `ready / ollama / postgres`. Open **http://127.0.0.1:8000**, paste the co
 
 ### 2. Upload and show ingestion
 
-Upload samples/model-routing-demo.txt, **version** `3`, **category** `demo`. Wait for confirmation. Confirm query filters: category `demo`, filename `model-routing-demo.txt`.
+Upload samples/model-routing-demo.txt, **version** `4`, **category** `demo`. Wait for confirmation. Confirm query filters: category `demo`, filename `model-routing-demo.txt`, version `4`.
+
+The expanded fictional handbook covers withdrawal deadlines, security holds, verification, deposits, complaints, outages, privacy and handovers. Its 19 named sections become separate searchable chunks. In the library, select **Ask about this**, then use the example buttons beside the question box. A factual lookup can cite one passage; the comparison asks for several policies and should cite different sections. More stored chunks does not mean every answer must cite all of them.
 
 Show the library, Refresh library and Ask about this. Re-upload the identical filename/version to show duplicate detection. PDF/Markdown support can be shown by uploading a small text-based file and asking a fact from it.
 
-Latest means the most recently uploaded version, not the largest version number. If another upload made version `3` historical, upload the sample with a new unused version and category `demo` before asking.
+Latest means the most recently uploaded version, not the largest version number. Version `4` preserves the previous short sample as history. If you have already used that version for different content, choose a new unused version and filter to it.
 
 ### 3. Ask and inspect the answers
 
@@ -85,14 +87,21 @@ Latest means the most recently uploaded version, not the largest version number.
 | --- | --- |
 | **How many minutes does support have to acknowledge a withdrawal complaint?** | 15 minutes; initial 1B route, actual final model and any 3B fallback |
 | **What happens if a standard withdrawal review exceeds 24 hours?** | Escalation to payments operations; retrieval of an exact policy detail |
+| **How many minutes after a successful provider deposit is missing from account activity should support escalate to payments operations?** | 60 minutes; a factual lookup from a different chunk |
 | **What is the company policy on flying to Mars?** | Insufficient evidence without citations |
 | Repeat the first question with identical filters within five minutes | Cache hit; no fresh model generation |
 
 For the larger-model example, ask:
 
-> Compare standard and security-flagged withdrawals. A customer urgently requests a withdrawal while account verification is incomplete and a security hold is active. Explain what support should do and what it must not do.
+> Compare standard and security-flagged withdrawal handling. State the standard review target after verification and what support does if review exceeds 24 hours. Who can clear a security hold, and what must support not do? State the complaint acknowledgement and progress-update deadlines. Cite the relevant sections.
 
-Show the **3B** route. Check acknowledgement within 15 minutes, security escalation, keeping the hold, no verification bypass/release, and a customer update without exposing detection rules. Standard reviews are within 24 hours after verification; overdue reviews escalate to payments operations.
+Show the **3B** route and citations from **STANDARD WITHDRAWAL REVIEW**, **SECURITY FLAGGED WITHDRAWAL** and **WITHDRAWAL COMPLAINT ACKNOWLEDGEMENT**. Check 24-hour standard review after verification, overdue escalation to payments operations, security clearance before release, no verification bypass, 15-minute acknowledgement and 2-hour progress updates during staffed hours.
+
+For a second comparison across different chunks, ask:
+
+> Compare platform outage triage and outage customer updates: how many independent reports in what time window trigger escalation, and how often are customer status updates published during a confirmed outage? Cite both sections.
+
+Expect 3 reports in 10 minutes, updates every 30 minutes, a **3B** route and citations from both outage sections. Citation count depends on the claims the model produces; inspect the excerpts rather than counting labels alone.
 
 Expand citations to inspect filename, version, page/section and excerpt. Show Copy answer, Model activity and Inspect query request and response for the API JSON. The factual example can fall back to 3B; do not promise a 1B-only answer. Set category to `nonexistent-demo-category` and ask a new question to show excluded evidence, then restore `demo`.
 
@@ -116,7 +125,7 @@ Use **Demo tools / Health & metrics** in the sidebar:
 | --- | --- |
 | **Check health** | Process and database/model readiness responses, displayed on the page |
 | **Load metrics** | API request counts and latency buckets; uses the connected app key |
-| **Database & SQL** | Opens Adminer in a browser tab: PostgreSQL, server `postgres`, username/database `rag`, password from `.env` -> `POSTGRES_PASSWORD` |
+| **Database & SQL** | Opens Adminer in a browser tab: PostgreSQL, server `postgres`, username/database `rag`, password from `.env` -&gt; `POSTGRES_PASSWORD` |
 | **API explorer** | Opens `/docs` in a browser tab; Authorize with the app key and try list/upload/query/delete/metrics endpoints |
 | **LangSmith traces** | Opens the tracing service in a browser tab; sign in and choose `production-rag` |
 | **Query request and response** | Expand under an answer to inspect submitted filters and returned answer/citations/routing JSON |

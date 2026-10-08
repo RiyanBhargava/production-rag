@@ -12,18 +12,35 @@ from app.config import Settings
 SAMPLES = {
     "trading": (
         "model-routing-demo.txt",
-        "3",
+        "4",
         "demo",
         [
-            ("How many minutes does support have to acknowledge a withdrawal complaint?", ["15"], "light"),
+            ("How many minutes does support have to acknowledge a withdrawal complaint?", ["15"], "light", 1),
             (
-                "Compare standard and security-flagged withdrawals. A customer urgently requests a withdrawal "
-                "while account verification is incomplete and a security hold is active. "
-                "Explain what support should do and what it must not do.",
-                ["15", "security", "verification"],
+                "Compare standard and security-flagged withdrawal handling. State the standard review target "
+                "after verification and what support does if review exceeds 24 hours. Who can clear a "
+                "security hold, and what must support not do? State the complaint acknowledgement and "
+                "progress-update deadlines. Cite the relevant sections.",
+                ["24", "payments", "security", "verification", "15", "2"],
                 "strong",
+                3,
             ),
-            ("What is the company policy on flying to Mars?", [], "light"),
+            (
+                "How many minutes after a successful provider deposit is missing from account activity "
+                "should support escalate to payments operations?",
+                ["60"],
+                "light",
+                1,
+            ),
+            (
+                "Compare platform outage triage and outage customer updates: how many independent "
+                "reports in what time window trigger escalation, and how often are customer status "
+                "updates published during a confirmed outage? Cite both sections.",
+                ["3", "10", "30"],
+                "strong",
+                2,
+            ),
+            ("What is the company policy on flying to Mars?", [], "light", 0),
         ],
     ),
     "policy": (
@@ -31,10 +48,10 @@ SAMPLES = {
         "1",
         "hr",
         [
-            ("How many days of paid annual leave do employees receive each year?", ["24"], "light"),
-            ("What does SEC-401 mean?", ["expired"], "light"),
-            ("Summarize annual leave, security and expense requirements.", ["24"], "strong"),
-            ("What is the company policy on flying to Mars?", [], "light"),
+            ("How many days of paid annual leave do employees receive each year?", ["24"], "light", 1),
+            ("What does SEC-401 mean?", ["expired"], "light", 1),
+            ("Summarize annual leave, security and expense requirements.", ["24"], "strong", 1),
+            ("What is the company policy on flying to Mars?", [], "light", 0),
         ],
     ),
 }
@@ -50,8 +67,21 @@ def check_sample(client, root, headers, settings, name):
     )
     assert upload.status_code == 201, upload.text
     document_id = upload.json()["document_id"]
+    if name == "trading" and not upload.json()["deduplicated"]:
+        assert upload.json()["chunks"] >= 18, upload.json()
+    print(
+        json.dumps(
+            {
+                "sample": name,
+                "version": version,
+                "new_chunks": upload.json()["chunks"],
+                "deduplicated": upload.json()["deduplicated"],
+            }
+        ),
+        flush=True,
+    )
     records = []
-    for question, terms, tier in cases:
+    for question, terms, tier, min_citations in cases:
         body = {
             "question": question,
             "filters": {"filename": filename, "category": category, "version": version},
@@ -69,13 +99,22 @@ def check_sample(client, root, headers, settings, name):
             assert not answer["insufficient_evidence"] and answer["citations"], answer
             assert all(term in answer["answer"].lower() for term in terms), answer
             assert all(c["document_id"] == document_id for c in answer["citations"]), answer
+            assert len({c["chunk_id"] for c in answer["citations"]}) >= min_citations, answer
+            if min_citations > 1:
+                assert len({c["section"] for c in answer["citations"]}) >= min_citations, answer
         else:
             assert answer["insufficient_evidence"] and not answer["citations"], answer
         record = dict(sample=name, question=question, seconds=round(time.monotonic() - started, 2), **answer)
         records.append(record)
         print(
             json.dumps(
-                {k: record[k] for k in ["sample", "question", "answer", "model_used", "routing", "seconds"]}
+                {
+                    **{
+                        k: record[k]
+                        for k in ["sample", "question", "answer", "model_used", "routing", "seconds"]
+                    },
+                    "citation_sections": [c["section"] for c in answer["citations"]],
+                }
             ),
             flush=True,
         )
