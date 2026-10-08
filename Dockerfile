@@ -5,7 +5,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY app ./app
 COPY static ./static
-RUN useradd --create-home rag && mkdir /app/data && chown -R rag:rag /app
+RUN useradd --create-home rag && mkdir -p /app/data /home/rag/.cache \
+    && chown rag:rag /app/data /home/rag/.cache
 USER rag
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000

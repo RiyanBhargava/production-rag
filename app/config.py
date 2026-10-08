@@ -21,7 +21,12 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_chat_model: str = "llama3:latest"
+    model_routing_enabled: bool = False
+    ollama_light_model: str = "llama3.2:1b"
+    routing_context_chars: int = Field(default=6000, gt=0)
     ollama_embedding_model: str = "nomic-embed-text:latest"
+    ollama_num_gpu: int | None = Field(default=None, ge=0)
+    ollama_embedding_num_gpu: int | None = Field(default=None, ge=0)
     ollama_timeout_seconds: float = Field(default=120, gt=0, le=600)
     ollama_context_tokens: int = Field(default=8192, ge=4096)
     ollama_document_prefix: str = "search_document: "
@@ -66,6 +71,10 @@ class Settings(BaseSettings):
             raise ValueError("GEMINI_API_KEY is required")
         if self.langsmith_tracing and not self.langsmith_api_key:
             raise ValueError("LANGSMITH_API_KEY is required when tracing is enabled")
+        if self.model_routing_enabled and self.model_mode != "ollama":
+            raise ValueError("Model routing currently requires MODEL_MODE=ollama")
+        if self.model_routing_enabled and self.ollama_light_model == self.ollama_chat_model:
+            raise ValueError("Configure distinct lightweight and stronger answer models")
         if self.embedding_mode == "ollama":
             from urllib.parse import urlparse
 
@@ -75,6 +84,8 @@ class Settings(BaseSettings):
             local_models = [self.ollama_embedding_model]
             if self.model_mode == "ollama":
                 local_models.append(self.ollama_chat_model)
+                if self.model_routing_enabled:
+                    local_models.append(self.ollama_light_model)
             if any("cloud" in model.lower() for model in local_models):
                 raise ValueError("Ollama mode requires local model tags, not cloud models")
         if self.storage_backend == "postgres" and not self.database_url:

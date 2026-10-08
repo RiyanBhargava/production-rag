@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Production RAG — Document workspace</title>
+    <title>Production RAG | Operations workspace</title>
     <link rel="stylesheet" href="/static/styles.css" />
     <script defer src="/static/app.js"></script>
   </head>
@@ -11,7 +11,7 @@
     <aside class="sidebar">
       <a class="brand" href="/"
         ><span class="brand-mark">R</span
-        ><span>Production<span class="brand-sub">RAG WORKSPACE</span></span></a
+        ><span>Production<span class="brand-sub">OPERATIONS WORKSPACE</span></span></a
       >
       <div class="nav-label">WORKSPACE</div>
       <a class="nav-item active" href="#workspace"
@@ -23,6 +23,7 @@
       <a class="nav-item" href="/docs" target="_blank" rel="noopener"
         ><span aria-hidden="true">↗</span> API reference</a
       >
+      <a class="nav-item" href="https://smith.langchain.com" target="_blank" rel="noopener"><span aria-hidden="true">&#8599;</span> View traces</a>
       <div class="sidebar-note">
         <span class="small-dot"></span> Evidence comes first
         <p>Answers grounded in your documents, with sources you can inspect.</p>
@@ -32,7 +33,7 @@
     <main id="workspace">
       <header class="topbar">
         <span class="breadcrumb"
-          >Workspace <span>/</span> Document intelligence</span
+          >Workspace <span>/</span> Operations intelligence</span
         ><span id="service-status" class="badge neutral"
           >Checking service…</span
         >
@@ -40,13 +41,16 @@
       <div class="page">
         <div class="page-heading">
           <div>
-            <p class="eyebrow">YOUR KNOWLEDGE, CONNECTED</p>
-            <h1>Ask. Find. Understand.</h1>
+            <p class="eyebrow">DOCUMENT INTELLIGENCE</p>
+            <h1>Clarity for every decision.</h1>
             <p class="subtitle">
-              Turn your documents into answers you can trace back to the source.
+              Search your operational knowledge. Get grounded answers with evidence you can inspect.
             </p>
           </div>
-          <span class="heading-art" aria-hidden="true">✳</span>
+          <div class="hero-label"><span class="small-dot"></span> EVIDENCE FIRST<span>Built for operational knowledge</span></div>
+        </div>
+        <div class="capabilities" aria-label="Workspace capabilities">
+          <span>Hybrid retrieval</span><span>Automatic model routing</span><span>Inspectable citations</span>
         </div>
         <section class="connection card" aria-labelledby="connection-title">
           <div>
@@ -125,7 +129,7 @@
             <div class="card-heading">
               <span class="step">02</span>
               <div>
-                <h2 id="ask-title">Ask a better question</h2>
+                <h2 id="ask-title">Query your knowledge</h2>
                 <p>Be specific, or request a document overview.</p>
               </div>
             </div>
@@ -146,14 +150,14 @@
               <div class="suggestions">
                 <button
                   type="button"
-                  data-question="Summarize the main points of this document."
+                  data-question="How many minutes does support have to acknowledge a withdrawal complaint?"
                 >
-                  Summarize main points</button
+                  Withdrawal response time</button
                 ><button
                   type="button"
-                  data-question="What are the key requirements and limitations?"
+                  data-question="Compare standard and security-flagged withdrawals. A customer urgently requests a withdrawal while account verification is incomplete and a security hold is active. Explain what support should do and what it must not do."
                 >
-                  Requirements & limitations
+                  Compare withdrawal procedures
                 </button>
               </div>
               <details class="filters" open>
@@ -207,6 +211,15 @@
             </p>
           </div>
           <div id="answer" class="answer-text" hidden></div>
+          <section id="routing-panel" class="routing-panel" aria-label="Model routing details" hidden>
+            <div class="routing-heading"><strong>Model activity</strong><span id="routing-policy"></span></div>
+            <div class="routing-grid">
+              <div><span class="routing-label">INITIAL ROUTE</span><strong id="routing-initial"></strong></div>
+              <div><span class="routing-label">FINAL MODEL</span><strong id="routing-final"></strong></div>
+              <div><span class="routing-label">REQUEST</span><strong id="routing-request"></strong></div>
+            </div>
+            <p id="routing-reason"></p>
+          </section>
           <div id="sources" class="sources"></div>
         </section>
         <section

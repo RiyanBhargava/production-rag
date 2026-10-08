@@ -29,6 +29,8 @@ services:
     env_file: .env
     environment:
       STORAGE_BACKEND: postgres
+      DATA_DIR: /app/data
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
       DATABASE_URL: postgresql+psycopg://rag:${POSTGRES_PASSWORD}@postgres:5432/rag
     ports:
       - "127.0.0.1:8000:8000"

@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
+from langsmith import trace
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -23,6 +24,7 @@ from sqlalchemy import text
 from app.config import Settings
 from app.documents import parse_chunks
 from app.pipeline import Models, Pipeline
+from app.routing import POLICY_VERSION
 from app.storage import Store
 
 logger = logging.getLogger("rag")
@@ -209,18 +211,42 @@ def create_app(settings=None):
 
     @app.post("/query")
     def query(body: Question, tenant_id: str = Depends(tenant)):
-        filters = body.filters.model_dump(exclude_none=True)
-        # Hold through answer so local delete/version updates cannot invalidate in-flight citations.
-        # For multiple production replicas, use document revisions plus transaction-level snapshots.
-        with mutation_lock:
-            key = json.dumps(
-                [tenant_id, body.model_dump(), app.state.store.revision(tenant_id)], sort_keys=True
-            )
-            hit = cache.get(key)
-            if hit:
-                return hit
-            result = app.state.pipeline.ask(tenant_id, body.question, filters)
-            cache.put(key, result)
-            return dict(result, cached=False)
+        with trace(
+            "rag-request",
+            inputs={"question": body.question} if settings.trace_content else {},
+            metadata={"routing_enabled": settings.model_routing_enabled, "routing_policy": POLICY_VERSION},
+        ) as run:
+            filters = body.filters.model_dump(exclude_none=True)
+            # Hold through answer so local delete/version updates cannot invalidate in-flight citations.
+            # For multiple production replicas, use document revisions plus transaction-level snapshots.
+            with mutation_lock:
+                key = json.dumps(
+                    [
+                        tenant_id,
+                        body.model_dump(),
+                        app.state.store.revision(tenant_id),
+                        settings.model_routing_enabled,
+                        settings.ollama_chat_model,
+                        settings.ollama_light_model,
+                        settings.routing_context_chars,
+                        POLICY_VERSION,
+                    ],
+                    sort_keys=True,
+                )
+                hit = cache.get(key)
+                if hit:
+                    run.add_metadata({"cached": True, "model_used": hit.get("model_used")})
+                    return hit
+                result = app.state.pipeline.ask(tenant_id, body.question, filters)
+                cache.put(key, result)
+                run.add_metadata(
+                    {
+                        "cached": False,
+                        "model_used": result.get("model_used"),
+                        "routing": result.get("routing"),
+                        "refusal_reason": result.get("reason"),
+                    }
+                )
+                return dict(result, cached=False)
 
     return app

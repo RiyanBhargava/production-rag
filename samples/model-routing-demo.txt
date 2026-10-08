@@ -1,0 +1,17 @@
+TRADING PLATFORM CUSTOMER OPERATIONS
+Fictional internal procedures for a software demo. These are not real company policies.
+
+STANDARD WITHDRAWAL
+A standard withdrawal is reviewed within 24 hours after account verification.
+Support checks the account verification status and the withdrawal reference.
+If review exceeds 24 hours, support escalates the case to payments operations.
+
+SECURITY-FLAGGED WITHDRAWAL
+A security-flagged withdrawal remains on hold until the security team clears it.
+Support must not release the withdrawal or bypass account verification.
+Support escalates the case to security operations and gives the customer a status
+update without revealing internal fraud-detection rules.
+
+CUSTOMER COMMUNICATION
+Support must acknowledge a withdrawal complaint within 15 minutes.
+Customer urgency does not override a security hold or verification requirements.

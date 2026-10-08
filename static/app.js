@@ -146,6 +146,7 @@ el("key").addEventListener("input", () => {
   el("sources").replaceChildren();
   el("answer-empty").hidden = false;
   el("answer-meta").hidden = true;
+  el("routing-panel").hidden = true;
   el("copy").disabled = true;
   lastAnswer = "";
   status("connection-status", "Key changed. Connect to load this workspace.");
@@ -224,6 +225,33 @@ function renderAnswer(data, seconds) {
     `badge ${data.insufficient_evidence ? "neutral" : "success"}`;
   el("answer-meta").textContent =
     `${data.mode === "demo" ? "Demo excerpts" : data.mode === "ollama" ? "Local model" : data.mode === "gemini" ? "Gemini" : "Hosted model"} · ${data.cached ? "cached" : `${seconds.toFixed(1)}s`}`;
+  if (data.model_used) {
+    el("answer-meta").textContent += ` \u00b7 ${data.model_used}`;
+    el("answer-meta").title = data.routing?.enabled
+      ? `Route: ${data.routing.reason}${data.routing.fallback ? ` \u00b7 fallback: ${data.routing.fallback_reason}` : ""}`
+      : "Configured answer model";
+  }
+  const routing = data.routing || {};
+  const reasons = {
+    factual_lookup: "Factual lookup",
+    synthesis_or_reasoning: "Comparison, synthesis, or reasoning",
+    multiple_documents: "Evidence from multiple documents",
+    large_context: "Large evidence context",
+    conservative_default: "Conservative model selection",
+    no_evidence: "No evidence available",
+    malformed_output: "The initial model returned an invalid response",
+    abstention_with_positive_retrieval: "The initial model abstained despite positive retrieval",
+  };
+  el("routing-panel").hidden = false;
+  el("routing-policy").textContent = routing.enabled ? "Automatic selection" : "Configured model";
+  el("routing-initial").textContent = routing.enabled
+    ? `${routing.tier === "light" ? "Lightweight" : routing.tier === "strong" ? "Larger" : "No generation"} \u00b7 ${routing.model || "None"}`
+    : data.model_used || "Default";
+  el("routing-final").textContent = data.model_used || "None";
+  el("routing-request").textContent = data.cached ? "Cache hit" : `Fresh \u00b7 ${seconds.toFixed(1)}s`;
+  const reason = reasons[routing.reason] || routing.reason || "Using the configured answer model";
+  const fallback = routing.fallback ? ` Escalated: ${reasons[routing.fallback_reason] || routing.fallback_reason}.` : "";
+  el("routing-reason").textContent = `${reason}.${fallback}${data.cached ? " Reused a previous answer; no model ran for this request." : ""}`;
   el("sources").replaceChildren();
   if (data.citations.length) {
     const title = document.createElement("p");
@@ -266,6 +294,7 @@ el("query-form").addEventListener("submit", (event) => {
     el("answer").hidden = true;
     el("sources").replaceChildren();
     el("answer-meta").hidden = true;
+    el("routing-panel").hidden = true;
     el("copy").disabled = true;
     lastAnswer = "";
     el("answer-empty").hidden = true;

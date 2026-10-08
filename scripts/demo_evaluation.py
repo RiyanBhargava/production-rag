@@ -65,6 +65,8 @@ def main():
         EMBEDDING_DIMENSIONS="64",
         RERANKER_MODE="lexical",
         APP_ENV="development",
+        MODEL_ROUTING_ENABLED="false",
+        LANGSMITH_TRACING="false",
     )
     subprocess.run(
         [
